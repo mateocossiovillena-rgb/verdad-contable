@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Deslizador de avance más fácil de mover con el dedo. */
+  input[type="range"] {
+    @apply h-10 w-full cursor-pointer accent-marca-600;
+  }
+}

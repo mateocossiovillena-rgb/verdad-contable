@@ -50,9 +50,12 @@ class Obra(Base):
     dueno_id: Mapped[int] = mapped_column(ForeignKey("usuario.id"), index=True)
     nombre: Mapped[str] = mapped_column(String(160))
     ubicacion: Mapped[str] = mapped_column(String(200), default="")
+    cliente: Mapped[str] = mapped_column(String(160), default="", server_default="")
     fecha_inicio: Mapped[date] = mapped_column(Date)
+    # Si la obra tiene cronograma, se ajusta sola al fin de la última actividad.
     fecha_fin: Mapped[date] = mapped_column(Date)
     moneda: Mapped[str] = mapped_column(String(8), default="Bs")
+    presupuesto_total: Mapped[Decimal | None] = mapped_column(DINERO)
     umbral_amarillo: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=Decimal("0.90"))
     umbral_rojo: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=Decimal("0.80"))
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
@@ -145,3 +148,59 @@ class CierreDia(Base):
     acumulado: Mapped[Decimal] = mapped_column(DINERO)
     usuario_id: Mapped[int] = mapped_column(ForeignKey("usuario.id"))
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
+
+
+# --- Cronograma ---
+
+
+class Fase(Base):
+    """Agrupa actividades del cronograma (ej. Obra gruesa, Instalaciones, Acabados)."""
+
+    __tablename__ = "fase"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    nombre: Mapped[str] = mapped_column(String(120))
+    orden: Mapped[int] = mapped_column(Integer, default=0)
+
+    actividades: Mapped[list[Actividad]] = relationship(
+        back_populates="fase", order_by="Actividad.orden", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class Actividad(Base):
+    """Tarea del cronograma. `fecha_inicio`/`fecha_fin` se recalculan al guardar (paso adelante del CPM).
+
+    Pensado para después: fechas tardías y holgura (ruta crítica) y recursos con precio unitario
+    en una tabla aparte que apunte a `actividad.id`.
+    """
+
+    __tablename__ = "actividad"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    fase_id: Mapped[int] = mapped_column(ForeignKey("fase.id", ondelete="CASCADE"), index=True)
+    nombre: Mapped[str] = mapped_column(String(160))
+    duracion_dias: Mapped[int] = mapped_column(Integer)
+    # Lo que eligió el usuario; solo se usa si la actividad no tiene predecesoras.
+    inicio_manual: Mapped[date | None] = mapped_column(Date)
+    fecha_inicio: Mapped[date] = mapped_column(Date)
+    fecha_fin: Mapped[date] = mapped_column(Date)
+    orden: Mapped[int] = mapped_column(Integer, default=0)
+
+    fase: Mapped[Fase] = relationship(back_populates="actividades")
+    predecesoras: Mapped[list[Dependencia]] = relationship(
+        foreign_keys="Dependencia.sucesora_id", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class Dependencia(Base):
+    """Enlace predecesora → sucesora. Por ahora solo fin-comienzo (FC) sin desfase;
+    `tipo` y `desfase_dias` quedan para CPM con otros tipos de enlace y esperas."""
+
+    __tablename__ = "dependencia"
+
+    predecesora_id: Mapped[int] = mapped_column(ForeignKey("actividad.id", ondelete="CASCADE"), primary_key=True)
+    sucesora_id: Mapped[int] = mapped_column(ForeignKey("actividad.id", ondelete="CASCADE"), primary_key=True)
+    tipo: Mapped[str] = mapped_column(String(2), default="FC", server_default="FC")
+    desfase_dias: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

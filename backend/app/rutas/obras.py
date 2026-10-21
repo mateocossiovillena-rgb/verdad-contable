@@ -87,7 +87,9 @@ def listar_obras(usuario: Usuario = Depends(usuario_actual), sesion: Session = D
 
 @rutas.post("/obras", response_model=ObraSalida, status_code=status.HTTP_201_CREATED)
 def crear_obra(datos: ObraEntrada, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)):
-    obra = Obra(dueno_id=dueno.id, **datos.model_dump())
+    valores = datos.model_dump()
+    valores["fecha_fin"] = valores["fecha_fin"] or valores["fecha_inicio"]
+    obra = Obra(dueno_id=dueno.id, **valores)
     sesion.add(obra)
     sesion.flush()
     servicios.partida_generales(sesion, obra)
@@ -105,8 +107,13 @@ def editar_obra(
     obra_id: int, datos: ObraEntrada, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)
 ):
     obra = obra_propia(sesion, dueno, obra_id)
-    for campo, valor in datos.model_dump().items():
+    valores = datos.model_dump()
+    if valores["fecha_fin"] is None:
+        valores["fecha_fin"] = max(obra.fecha_fin, valores["fecha_inicio"])
+    for campo, valor in valores.items():
         setattr(obra, campo, valor)
+    # Las actividades sin fecha propia empiezan con la obra.
+    servicios.recalcular_cronograma(sesion, obra)
     sesion.commit()
     return obra
 

@@ -23,13 +23,17 @@ export interface Encargado extends Usuario {
   obra_ids: number[];
 }
 
+export type Moneda = "Bs" | "USD";
+
 export interface Obra {
   id: number;
   nombre: string;
   ubicacion: string;
+  cliente: string;
   fecha_inicio: string;
   fecha_fin: string;
-  moneda: string;
+  moneda: Moneda;
+  presupuesto_total: number | null;
   umbral_amarillo: number;
   umbral_rojo: number;
 }
@@ -149,4 +153,31 @@ export interface Alerta {
   partida_id: number | null;
   nivel: "amarillo" | "rojo";
   mensaje: string;
+}
+
+export interface Actividad {
+  id: number;
+  fase_id: number;
+  nombre: string;
+  duracion_dias: number;
+  inicio_manual: string | null;
+  fecha_inicio: string;
+  fecha_fin: string;
+  orden: number;
+  predecesoras: number[];
+}
+
+export interface Fase {
+  id: number;
+  nombre: string;
+  orden: number;
+  actividades: Actividad[];
+}
+
+export interface Cronograma {
+  obra: Obra;
+  hoy: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  fases: Fase[];
 }

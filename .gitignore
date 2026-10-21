@@ -12,3 +12,4 @@ build/
 fotos/
 .ruff_cache/
 .pytest_cache/
+*.tsbuildinfo

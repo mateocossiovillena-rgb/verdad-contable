@@ -60,6 +60,7 @@ function TarjetaObraDueno({ obra }: { obra: ObraResumen }) {
           <div>
             <h2 className="text-lg font-semibold">{obra.nombre}</h2>
             <p className="text-sm text-stone-500">
+              {obra.cliente && `${obra.cliente} · `}
               {obra.ubicacion && `${obra.ubicacion} · `}
               {fecha(obra.fecha_inicio)} – {fecha(obra.fecha_fin)}
             </p>

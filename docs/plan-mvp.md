@@ -78,3 +78,36 @@ Para una fecha de corte `t`, por partida y luego sumado por obra:
 10. Prueba interna con una obra real → ajustes → Fase 3 (piloto con 2 constructores).
 
 Fuera del MVP: marketplace de insumos, cotizaciones de subcontratistas, compras comprometidas, facturación.
+
+## 6. Cronograma de la obra (implementado)
+
+- **Obra**: nombre, ubicación, cliente, fecha de inicio, moneda (Bs/USD) y presupuesto total opcional.
+  La fecha de fin ya no se pide: es el fin de la última actividad.
+- **Fase** (`fase`): agrupa actividades; se crean, renombran, borran (con sus actividades) y reordenan.
+- **Actividad** (`actividad`): nombre, duración en días calendario, fecha de inicio manual y predecesoras.
+  Con predecesoras, el inicio es el día siguiente al fin de la última de ellas (la fecha manual se ignora).
+  `fecha_inicio` y `fecha_fin` se guardan ya calculadas y se recalculan en cada cambio.
+- **Dependencia** (`dependencia`): enlace predecesora → sucesora con `tipo` (hoy solo `FC`, fin-comienzo)
+  y `desfase_dias` (hoy 0). Las dependencias circulares se rechazan nombrando el ciclo.
+- Cálculo en `backend/app/calculos/cronograma.py` (sin base de datos, con tests): orden topológico +
+  paso hacia adelante del CPM.
+- Pantalla de la obra: datos, línea de tiempo (Gantt por fase con marca de hoy) y editor de fases/actividades.
+
+## 7. Próximos pasos (preparados en el modelo, sin implementar)
+
+**Ruta crítica (CPM)**
+1. Paso hacia atrás sobre el mismo orden topológico de `calculos/cronograma.py`: inicio y fin tardíos.
+2. Holgura total = inicio tardío − inicio temprano; actividades con holgura 0 = ruta crítica.
+3. Usar `dependencia.tipo` para los otros enlaces (CC comienzo-comienzo, FF fin-fin, CF) y
+   `dependencia.desfase_dias` para esperas (ej. fraguado del hormigón). Hoy el cálculo ya suma el desfase.
+4. Mostrar la ruta crítica en rojo en el Gantt y la holgura de cada actividad.
+5. Opcional: calendario laboral (días hábiles, feriados de Bolivia) en lugar de días calendario.
+
+**Recursos con precio unitario por actividad**
+1. Tabla nueva `recurso_actividad`: id, actividad_id (→ `actividad.id`, borrado en cascada),
+   tipo (`material`, `mano_obra`, `equipo`), descripción, unidad (m³, bolsa, jornal, hora…),
+   cantidad `NUMERIC(14,3)`, precio_unitario `NUMERIC(14,2)` en la moneda de la obra.
+2. Costo de la actividad = Σ cantidad × precio unitario; costo de la fase y de la obra = suma.
+3. Comparar ese costo con `obra.presupuesto_total` y, más adelante, con los gastos reales.
+4. Unir actividades con partidas (EVM): cada actividad aporta su costo como BAC y sus fechas como PV,
+   para que "gasté vs. debería" salga del mismo cronograma.

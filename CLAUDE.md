@@ -57,8 +57,12 @@ Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mis
 - [ ] Fase 2: construir MVP (en curso)
   - [x] Backend: cálculos EVM, modelos, migración inicial, API, datos demo, 36 tests (`backend/`)
   - [x] Frontend base: api, cola sin señal, sesión, UI, Marco, Curva, Ingresar/Registro, Obras, Hoy/Cierre
-  - [ ] Frontend: NuevoGasto, NuevoAvance, DetalleObra, FormObra, Partidas+hitos, Gastos, Alertas, Equipo,
-        App.tsx (rutas), main.tsx (+ registro de sw.js), index.css, íconos PNG
-  - [ ] npm install + build, prueba en navegador y celular
+  - [x] App.tsx (rutas), main.tsx (+ registro de sw.js), index.css; npm install + build
+  - [x] Cronograma: obra (cliente, moneda Bs/USD, presupuesto total), fases, actividades con predecesoras,
+        Gantt por fase con marca de hoy (FormObra, DetalleObra, `calculos/cronograma.py`, 51 tests)
+  - [ ] Pantallas "En construcción": NuevoGasto, NuevoAvance, Partidas+hitos, Gastos, Alertas
+        (Equipo quedó fuera del MVP: el menú todavía la enlaza)
+  - [ ] Próximos: ruta crítica (CPM) y recursos con precio unitario → docs/plan-mvp.md §7
+  - [ ] Íconos PNG, prueba en celular real
   - [ ] Dockerfile, CI (GitHub Actions), README con instrucciones
 - [ ] Fase 3: piloto con 2 constructores

@@ -14,8 +14,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import config
+from app.calculos import cronograma as cr
 from app.calculos import valor_ganado as vg
-from app.modelos import Avance, CierreDia, Gasto, Hito, Obra, Partida, Usuario
+from app.modelos import Actividad, Avance, CierreDia, Dependencia, Gasto, Hito, Obra, Partida, Usuario
 
 NOMBRE_GENERALES = "Gastos generales"
 _FIRMAS_IMAGEN = {b"\xff\xd8\xff": ".jpg", b"\x89PNG": ".png", b"RIFF": ".webp"}
@@ -222,3 +223,50 @@ def _resumen_partida(r: vg.ResultadoPartida) -> str:
     if i.cpi is not None and i.cpi < 1:
         partes.append("gasta más de lo que avanza")
     return " y ".join(partes) or "fuera de rango"
+
+
+# --- Cronograma ---
+
+
+def actividades_de_obra(sesion: Session, obra_id: int) -> list[Actividad]:
+    return list(sesion.scalars(select(Actividad).where(Actividad.obra_id == obra_id).order_by(Actividad.id)))
+
+
+def predecesoras_por_actividad(sesion: Session, obra_id: int) -> dict[int, list[Dependencia]]:
+    enlaces: dict[int, list[Dependencia]] = defaultdict(list)
+    for d in sesion.scalars(
+        select(Dependencia).join(Actividad, Dependencia.sucesora_id == Actividad.id).where(Actividad.obra_id == obra_id)
+    ):
+        enlaces[d.sucesora_id].append(d)
+    return enlaces
+
+
+def datos_cronograma(
+    actividades: list[Actividad], enlaces: dict[int, list[tuple[int, int]]]
+) -> list[cr.DatosActividad]:
+    return [
+        cr.DatosActividad(
+            id=a.id,
+            duracion_dias=a.duracion_dias,
+            inicio_manual=a.inicio_manual,
+            predecesoras=tuple(cr.Enlace(p, desfase) for p, desfase in enlaces.get(a.id, [])),
+        )
+        for a in actividades
+    ]
+
+
+def recalcular_cronograma(sesion: Session, obra: Obra) -> None:
+    """Recalcula las fechas de todas las actividades y el fin de la obra. Hace flush antes."""
+    sesion.flush()
+    actividades = actividades_de_obra(sesion, obra.id)
+    if not actividades:
+        return
+    enlaces = {
+        sucesora: [(d.predecesora_id, d.desfase_dias) for d in deps]
+        for sucesora, deps in predecesoras_por_actividad(sesion, obra.id).items()
+    }
+    fechas = cr.calcular_fechas(datos_cronograma(actividades, enlaces), obra.fecha_inicio)
+    for a in actividades:
+        a.fecha_inicio = fechas[a.id].inicio
+        a.fecha_fin = fechas[a.id].fin
+    obra.fecha_fin = max([obra.fecha_inicio] + [f.fin for f in fechas.values()])

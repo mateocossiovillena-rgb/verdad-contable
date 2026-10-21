@@ -34,3 +34,9 @@ export function hoyISO(): string {
   const local = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 10);
 }
+
+/** Monto en la moneda de la obra (Bs o USD). */
+export function dinero(valor: number | null | undefined, moneda: string): string {
+  if (valor === null || valor === undefined) return "—";
+  return `${moneda === "USD" ? "$us" : "Bs"} ${numeroBs.format(valor)}`;
+}

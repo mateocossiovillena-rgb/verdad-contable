@@ -16,6 +16,7 @@ DineroOpcional = Annotated[
 ]
 MontoEntrada = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=2)]
 TipoGasto = Literal["material", "mano_obra", "subcontrato", "caja_chica", "transporte"]
+Moneda = Literal["Bs", "USD"]
 
 
 class Modelo(BaseModel):
@@ -79,8 +80,12 @@ class EncargadoSalida(UsuarioSalida):
 class ObraEntrada(BaseModel):
     nombre: str = Field(min_length=2, max_length=160)
     ubicacion: str = Field(default="", max_length=200)
+    cliente: str = Field(default="", max_length=160)
     fecha_inicio: date
-    fecha_fin: date
+    # Opcional: si no se indica, la obra termina donde termina su cronograma.
+    fecha_fin: date | None = None
+    moneda: Moneda = "Bs"
+    presupuesto_total: MontoEntrada | None = None
     umbral_amarillo: Decimal = Field(default=Decimal("0.90"), gt=0, le=2, decimal_places=2)
     umbral_rojo: Decimal = Field(default=Decimal("0.80"), gt=0, le=2, decimal_places=2)
 
@@ -96,9 +101,11 @@ class ObraSalida(Modelo):
     id: int
     nombre: str
     ubicacion: str
+    cliente: str
     fecha_inicio: date
     fecha_fin: date
     moneda: str
+    presupuesto_total: DineroOpcional = None
     umbral_amarillo: Dinero
     umbral_rojo: Dinero
 
@@ -294,3 +301,49 @@ class Alerta(BaseModel):
     partida_id: int | None = None
     nivel: Literal["amarillo", "rojo"]
     mensaje: str
+
+
+# --- Cronograma ---
+
+
+class FaseEntrada(BaseModel):
+    nombre: str = Field(min_length=1, max_length=120)
+
+
+class OrdenFases(BaseModel):
+    ids: list[int] = Field(description="Ids de todas las fases de la obra en el nuevo orden")
+
+
+class ActividadEntrada(BaseModel):
+    nombre: str = Field(min_length=1, max_length=160)
+    duracion_dias: int = Field(ge=1, le=3650)
+    inicio_manual: date | None = Field(default=None, description="Se ignora si hay predecesoras")
+    predecesoras: list[int] = []
+    fase_id: int | None = Field(default=None, description="Solo al editar, para mover de fase")
+
+
+class ActividadSalida(BaseModel):
+    id: int
+    fase_id: int
+    nombre: str
+    duracion_dias: int
+    inicio_manual: date | None
+    fecha_inicio: date
+    fecha_fin: date
+    orden: int
+    predecesoras: list[int]
+
+
+class FaseSalida(BaseModel):
+    id: int
+    nombre: str
+    orden: int
+    actividades: list[ActividadSalida]
+
+
+class Cronograma(BaseModel):
+    obra: ObraSalida
+    hoy: date
+    fecha_inicio: date
+    fecha_fin: date
+    fases: list[FaseSalida]
