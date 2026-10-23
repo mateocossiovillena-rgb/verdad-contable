@@ -26,4 +26,7 @@ DIAS_SESION = int(os.environ.get("DIAS_SESION", "30"))
 CARPETA_FOTOS = Path(os.environ.get("CARPETA_FOTOS", RAIZ_BACKEND / "fotos"))
 TAMANO_MAX_FOTO = 3 * 1024 * 1024  # bytes, ya comprimida en el celular
 
+CARPETA_PLANOS = Path(os.environ.get("CARPETA_PLANOS", RAIZ_BACKEND / "planos"))
+TAMANO_MAX_PLANO = 25 * 1024 * 1024  # bytes
+
 CARPETA_FRONTEND = Path(os.environ.get("CARPETA_FRONTEND", RAIZ_BACKEND.parent / "frontend" / "dist"))

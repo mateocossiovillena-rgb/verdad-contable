@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -230,3 +230,47 @@ class RecursoActividad(Base):
     por_dia: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     orden: Mapped[int] = mapped_column(Integer, default=0)
 
+
+# --- Estimación desde plano (CAD o BIM) ---
+
+
+class Estimacion(Base):
+    """Asistente "Estimar desde plano" de una obra: lo leído del archivo y lo que confirmó el dueño.
+
+    `paso` es el paso del asistente en el que quedó. CAD (dxf): capas → plantas → formulario → cantidades →
+    confirmada. BIM (ifc): plantas → cantidades → confirmada (el modelo responde el formulario).
+    Las cantidades no se guardan: se calculan al leer con `medicion` y `formulario`. Solo se guardan las
+    correcciones a mano (`ediciones`), así no se pierden si se vuelve a un paso anterior.
+    """
+
+    __tablename__ = "estimacion"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    creado_por: Mapped[int] = mapped_column(ForeignKey("usuario.id"))
+    tipo_archivo: Mapped[str] = mapped_column(String(4))
+    nombre_archivo: Mapped[str] = mapped_column(String(200))
+    # Nombre aleatorio en la carpeta de planos; nunca se sirve en público.
+    archivo: Mapped[str] = mapped_column(String(80))
+    paso: Mapped[str] = mapped_column(String(20))
+    unidades: Mapped[int | None] = mapped_column(Integer)
+    lectura: Mapped[dict] = mapped_column(JSON, default=dict)
+    capas: Mapped[dict] = mapped_column(JSON, default=dict)
+    plantas: Mapped[list] = mapped_column(JSON, default=list)
+    formulario: Mapped[dict | None] = mapped_column(JSON)
+    medicion: Mapped[dict | None] = mapped_column(JSON)
+    ediciones: Mapped[dict] = mapped_column(JSON, default=dict)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora, onupdate=ahora)
+
+
+class MapeoCapa(Base):
+    """Rol que el dueño le dio a una capa CAD, para sugerirlo igual en su próximo plano."""
+
+    __tablename__ = "mapeo_capa"
+    __table_args__ = (UniqueConstraint("dueno_id", "capa"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dueno_id: Mapped[int] = mapped_column(ForeignKey("usuario.id", ondelete="CASCADE"), index=True)
+    capa: Mapped[str] = mapped_column(String(120))  # nombre normalizado (mayúsculas, sin tildes)
+    rol: Mapped[str] = mapped_column(String(20))

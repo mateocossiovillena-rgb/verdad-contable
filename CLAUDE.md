@@ -60,9 +60,24 @@ Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mis
   - [x] App.tsx (rutas), main.tsx (+ registro de sw.js), index.css; npm install + build
   - [x] Cronograma: obra (cliente, moneda Bs/USD, presupuesto total), fases, actividades con predecesoras,
         Gantt por fase con marca de hoy (FormObra, DetalleObra, `calculos/cronograma.py`, 51 tests)
-  - [ ] Pantallas "En construcción": NuevoGasto, NuevoAvance, Partidas+hitos, Gastos, Alertas
-        (Equipo quedó fuera del MVP: el menú todavía la enlaza)
-  - [ ] Próximos: ruta crítica (CPM) y recursos con precio unitario → docs/plan-mvp.md §7
+  - [x] Rediseño según `guia-diseno-frontend.md`: íconos SVG propios (`componentes/iconos.tsx`), componentes
+        base en `ui.tsx` (Pildora, Metrica, Pestanas, Interruptor, OpcionGrande, avisos), cabecera blanca,
+        menú Obras · Alertas · Cuenta (Equipo fuera del menú)
+  - [x] Pantallas NuevoGasto, NuevoAvance, Partidas+hitos, Gastos (filtros, Excel, anular), Alertas, Cuenta;
+        DetalleObra con pestañas Resumen (frase, métricas, curva S, índices) y Cronograma
+  - [ ] Revisar el rediseño en celular real (al sol, con señal débil)
+  - [x] Mano de obra (por día o por la actividad) y materiales por actividad, con costos por fase y obra
+  - [ ] Próximos: ruta crítica (CPM), equipo, comparar con presupuesto → docs/plan-mvp.md §7
+  - [ ] Estimación desde plano CAD/BIM + formulario → pasos del proyecto y ruta crítica (propuesta)
+        → docs/plan-estimacion-planos.md (orden: C0 ruta crítica → E0 → E1…)
+    - [ ] EN CURSO: subir plano DXF (CAD) o IFC (BIM); formulario solo para CAD. Lectores propios, sin
+          librerías externas (licencias). Hecho: `calculos/plano_dxf.py`, `calculos/medicion_plano.py`,
+          `calculos/plano_ifc.py`, `calculos/computos.py`, planos de prueba en `tests/planos_prueba.py`,
+          tablas `Estimacion` y `MapeoCapa` en modelos.py, `CARPETA_PLANOS` en config.
+          Falta: migración Alembic, `app/planos.py` + `rutas/estimaciones.py` (subir con cuerpo binario
+          `?nombre=`, capas+unidades, plantas, formulario solo dxf, cantidades con ediciones, geometría),
+          tests, página `EstimarObra` + `VistaPlano` + `TablaCantidades`, botón en Cronograma.
+          Después: generar cronograma y ruta crítica desde las cantidades.
   - [ ] Íconos PNG, prueba en celular real
   - [ ] Dockerfile, CI (GitHub Actions), README con instrucciones
 - [ ] Fase 3: piloto con 2 constructores
