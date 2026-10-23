@@ -314,12 +314,45 @@ class OrdenFases(BaseModel):
     ids: list[int] = Field(description="Ids de todas las fases de la obra en el nuevo orden")
 
 
+TipoRecurso = Literal["mano_obra", "material"]
+
+
+class RecursoEntrada(BaseModel):
+    tipo: TipoRecurso
+    descripcion: str = Field(min_length=1, max_length=160, description="Cargo (Albañil) o material (Cemento)")
+    unidad: str = Field(default="", max_length=20, description="Solo materiales: bolsa, m³, pieza…")
+    cantidad: Decimal = Field(gt=0, max_digits=14, decimal_places=3, description="Personas o cantidad")
+    precio_unitario: MontoEntrada = Field(description="Costo por persona o precio por unidad")
+    por_dia: bool = Field(default=False, description="Mano de obra pagada por día (jornal)")
+
+    @model_validator(mode="after")
+    def _coherente(self):
+        if self.tipo == "material":
+            self.por_dia = False
+        elif self.cantidad != self.cantidad.to_integral_value():
+            raise ValueError("La cantidad de personas debe ser un número entero")
+        return self
+
+
+class RecursoSalida(BaseModel):
+    id: int
+    tipo: str
+    descripcion: str
+    unidad: str
+    cantidad: float
+    precio_unitario: Dinero
+    por_dia: bool
+    costo: Dinero
+
+
 class ActividadEntrada(BaseModel):
     nombre: str = Field(min_length=1, max_length=160)
     duracion_dias: int = Field(ge=1, le=3650)
     inicio_manual: date | None = Field(default=None, description="Se ignora si hay predecesoras")
     predecesoras: list[int] = []
     fase_id: int | None = Field(default=None, description="Solo al editar, para mover de fase")
+    # None = no tocar los recursos que ya tiene; [] = quitarlos todos.
+    recursos: list[RecursoEntrada] | None = Field(default=None, max_length=100)
 
 
 class ActividadSalida(BaseModel):
@@ -332,6 +365,10 @@ class ActividadSalida(BaseModel):
     fecha_fin: date
     orden: int
     predecesoras: list[int]
+    recursos: list[RecursoSalida] = []
+    costo_mano_obra: Dinero = Decimal("0")
+    costo_materiales: Dinero = Decimal("0")
+    costo_total: Dinero = Decimal("0")
 
 
 class FaseSalida(BaseModel):
@@ -339,6 +376,7 @@ class FaseSalida(BaseModel):
     nombre: str
     orden: int
     actividades: list[ActividadSalida]
+    costo_total: Dinero = Decimal("0")
 
 
 class Cronograma(BaseModel):
@@ -347,3 +385,6 @@ class Cronograma(BaseModel):
     fecha_inicio: date
     fecha_fin: date
     fases: list[FaseSalida]
+    costo_mano_obra: Dinero = Decimal("0")
+    costo_materiales: Dinero = Decimal("0")
+    costo_total: Dinero = Decimal("0")

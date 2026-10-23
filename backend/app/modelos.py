@@ -171,8 +171,7 @@ class Fase(Base):
 class Actividad(Base):
     """Tarea del cronograma. `fecha_inicio`/`fecha_fin` se recalculan al guardar (paso adelante del CPM).
 
-    Pensado para después: fechas tardías y holgura (ruta crítica) y recursos con precio unitario
-    en una tabla aparte que apunte a `actividad.id`.
+    Pensado para después: fechas tardías y holgura (ruta crítica).
     """
 
     __tablename__ = "actividad"
@@ -192,6 +191,9 @@ class Actividad(Base):
     predecesoras: Mapped[list[Dependencia]] = relationship(
         foreign_keys="Dependencia.sucesora_id", cascade="all, delete-orphan", passive_deletes=True
     )
+    recursos: Mapped[list[RecursoActividad]] = relationship(
+        order_by="RecursoActividad.orden", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class Dependencia(Base):
@@ -204,3 +206,27 @@ class Dependencia(Base):
     sucesora_id: Mapped[int] = mapped_column(ForeignKey("actividad.id", ondelete="CASCADE"), primary_key=True)
     tipo: Mapped[str] = mapped_column(String(2), default="FC", server_default="FC")
     desfase_dias: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+TIPOS_RECURSO = {"mano_obra": "Mano de obra", "material": "Material"}
+
+
+class RecursoActividad(Base):
+    """Mano de obra o material de una actividad. El costo se calcula al leer (depende de la duración).
+
+    Mano de obra: `cantidad` = personas, `precio_unitario` = costo por persona; si `por_dia`,
+    se multiplica por la duración de la actividad (jornal). Material: cantidad × precio unitario.
+    """
+
+    __tablename__ = "recurso_actividad"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actividad_id: Mapped[int] = mapped_column(ForeignKey("actividad.id", ondelete="CASCADE"), index=True)
+    tipo: Mapped[str] = mapped_column(String(20))
+    descripcion: Mapped[str] = mapped_column(String(160))
+    unidad: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    cantidad: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    precio_unitario: Mapped[Decimal] = mapped_column(DINERO)
+    por_dia: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    orden: Mapped[int] = mapped_column(Integer, default=0)
+

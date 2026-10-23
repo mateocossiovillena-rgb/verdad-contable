@@ -7,7 +7,7 @@ const M = { arriba: 16, derecha: 16, abajo: 32, izquierda: 64 };
 
 /** Curva acumulada: planificado (PV), ganado (EV) y gastado (AC). */
 export function Curva({ puntos, hitos, corte }: { puntos: PuntoCurva[]; hitos: Hito[]; corte: string }) {
-  if (puntos.length < 2) return <p className="text-sm text-stone-500">Faltan datos para dibujar la curva.</p>;
+  if (puntos.length < 2) return <p className="text-sm text-stone-600">Faltan datos para dibujar la curva: carga presupuesto, fechas y avance.</p>;
 
   const tiempo = (iso: string) => new Date(iso + "T00:00:00").getTime();
   const t0 = tiempo(puntos[0].fecha);
@@ -31,13 +31,13 @@ export function Curva({ puntos, hitos, corte }: { puntos: PuntoCurva[]; hitos: H
         {marcas.map((v) => (
           <g key={v}>
             <line x1={M.izquierda} x2={ANCHO - M.derecha} y1={y(v)} y2={y(v)} className="stroke-stone-200" />
-            <text x={M.izquierda - 6} y={y(v) + 4} textAnchor="end" className="fill-stone-500 text-[11px]">
+            <text x={M.izquierda - 6} y={y(v) + 4} textAnchor="end" className="fill-stone-600 text-[11px] tabular-nums">
               {Math.round(v / 1000)}k
             </text>
           </g>
         ))}
         {etiquetasX.map((p) => (
-          <text key={p.fecha} x={x(p.fecha)} y={ALTO - 10} textAnchor="middle" className="fill-stone-500 text-[11px]">
+          <text key={p.fecha} x={x(p.fecha)} y={ALTO - 10} textAnchor="middle" className="fill-stone-600 text-[11px] tabular-nums">
             {fechaCorta(p.fecha)}
           </text>
         ))}
@@ -65,20 +65,20 @@ export function Curva({ puntos, hitos, corte }: { puntos: PuntoCurva[]; hitos: H
           strokeDasharray="4 4"
         />
         <path d={linea("pv")} fill="none" className="stroke-stone-500" strokeWidth={2} strokeDasharray="6 4" />
-        <path d={linea("ev")} fill="none" className="stroke-green-600" strokeWidth={3} />
-        <path d={linea("ac")} fill="none" className="stroke-red-600" strokeWidth={3} />
+        <path d={linea("ev")} fill="none" className="stroke-emerald-600" strokeWidth={3} />
+        <path d={linea("ac")} fill="none" className="stroke-marca-600" strokeWidth={3} />
       </svg>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-600">
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums text-stone-700">
         <span>
           <span className="mr-1 inline-block w-4 border-t-2 border-dashed border-stone-500 align-middle" />
           Debería (plan): {bs(puntos.find((p) => p.fecha === corte)?.pv)}
         </span>
         <span>
-          <span className="mr-1 inline-block w-4 border-t-[3px] border-green-600 align-middle" />
+          <span className="mr-1 inline-block w-4 border-t-[3px] border-emerald-600 align-middle" />
           Avanzado (valor ganado)
         </span>
         <span>
-          <span className="mr-1 inline-block w-4 border-t-[3px] border-red-600 align-middle" />
+          <span className="mr-1 inline-block w-4 border-t-[3px] border-marca-600 align-middle" />
           Gastado
         </span>
         {hitos.length > 0 && (

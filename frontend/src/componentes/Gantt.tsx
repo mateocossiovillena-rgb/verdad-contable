@@ -16,6 +16,25 @@ function iso(dias: number): string {
   return new Date(dias * 86_400_000).toISOString().slice(0, 10);
 }
 
+// Estado de cada actividad según la fecha de hoy (el avance físico se registra por partida, no por actividad).
+type EstadoActividad = "terminada" | "en_curso" | "pendiente";
+const COLOR_ESTADO: Record<EstadoActividad, string> = {
+  terminada: "bg-stone-400",
+  en_curso: "bg-stone-800",
+  pendiente: "bg-stone-200 ring-1 ring-inset ring-stone-300",
+};
+const TEXTO_ESTADO: Record<EstadoActividad, string> = {
+  terminada: "Ya debió terminar",
+  en_curso: "En curso",
+  pendiente: "Por empezar",
+};
+
+function estadoPorFecha(a: Actividad, hoy: number): EstadoActividad {
+  if (dia(a.fecha_fin) < hoy) return "terminada";
+  if (dia(a.fecha_inicio) <= hoy) return "en_curso";
+  return "pendiente";
+}
+
 /** Píxeles por día según lo largo de la obra, para que entre en pantalla sin quedar diminuto. */
 function anchoDia(totalDias: number): number {
   if (totalDias <= 21) return 32;
@@ -108,7 +127,13 @@ export function Gantt({ cronograma }: { cronograma: Cronograma }) {
                     }
                     anchoEje={anchoEje}
                   >
-                    <Barra actividad={a} izquierda={x(dia(a.fecha_inicio))} ancho={a.duracion_dias * w} nombres={nombres} />
+                    <Barra
+                      actividad={a}
+                      izquierda={x(dia(a.fecha_inicio))}
+                      ancho={a.duracion_dias * w}
+                      nombres={nombres}
+                      hoy={hoy}
+                    />
                   </Fila>
                 ))}
               </div>
@@ -117,20 +142,28 @@ export function Gantt({ cronograma }: { cronograma: Cronograma }) {
 
           {hoyVisible && (
             <div
-              className="pointer-events-none absolute bottom-0 top-0 z-10 w-0.5 bg-red-600"
+              className="pointer-events-none absolute bottom-0 top-0 z-10 w-0.5 bg-marca-600"
               style={{ left: ANCHO_ETIQUETA + x(hoy) + w / 2 }}
             >
-              <span className="absolute left-1 top-1 rounded bg-red-600 px-1 text-[10px] font-semibold text-white">
+              <span className="absolute left-1 top-1 rounded bg-marca-600 px-1 text-[11px] font-semibold text-white">
                 Hoy
               </span>
             </div>
           )}
         </div>
       </div>
-      <p className="mt-2 text-xs text-stone-500">
-        {fecha(cronograma.fecha_inicio)} – {fecha(cronograma.fecha_fin)}
-        {!hoyVisible && ` · Hoy (${fecha(cronograma.hoy)}) está fuera de las fechas de la obra`}
-      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-600">
+        <span className="tabular-nums">
+          {fecha(cronograma.fecha_inicio)} – {fecha(cronograma.fecha_fin)}
+          {!hoyVisible && ` · Hoy (${fecha(cronograma.hoy)}) está fuera de las fechas de la obra`}
+        </span>
+        {(["terminada", "en_curso", "pendiente"] as const).map((e) => (
+          <span key={e} className="inline-flex items-center gap-1.5">
+            <span className={`h-2.5 w-4 rounded-sm ${COLOR_ESTADO[e]}`} />
+            {TEXTO_ESTADO[e]}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -166,19 +199,22 @@ function Barra({
   izquierda,
   ancho,
   nombres,
+  hoy,
 }: {
   actividad: Actividad;
   izquierda: number;
   ancho: number;
   nombres: Map<number, string>;
+  hoy: number;
 }) {
   const despues = a.predecesoras.map((p) => nombres.get(p)).filter(Boolean);
+  const estado = estadoPorFecha(a, hoy);
   const detalle =
-    `${a.nombre}: ${fecha(a.fecha_inicio)} – ${fecha(a.fecha_fin)} (${a.duracion_dias} d)` +
+    `${a.nombre}: ${fecha(a.fecha_inicio)} – ${fecha(a.fecha_fin)} (${a.duracion_dias} d) · ${TEXTO_ESTADO[estado]}` +
     (despues.length ? `\nDespués de: ${despues.join(", ")}` : "");
   return (
     <div
-      className="absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden rounded bg-marca-500 px-1 text-[11px] font-medium text-white"
+      className={`absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden rounded px-1 text-[11px] font-medium ${COLOR_ESTADO[estado]} ${estado === "pendiente" ? "text-stone-700" : "text-white"}`}
       style={{ left: izquierda, width: Math.max(ancho, 4) }}
       title={detalle}
     >

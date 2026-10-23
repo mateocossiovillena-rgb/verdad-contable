@@ -15,8 +15,8 @@ function Portada({ children }: { children: React.ReactNode }) {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 p-6">
       <div className="text-center">
         <img src="/icono.svg" alt="" className="mx-auto h-16 w-16" />
-        <h1 className="mt-3 text-2xl font-bold">Verdad Contable</h1>
-        <p className="text-stone-600">Cuánto gastaste de verdad y cómo va tu obra.</p>
+        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-stone-900">Verdad Contable</h1>
+        <p className="mt-1 text-stone-600">Cuánto gastaste de verdad y cómo va tu obra.</p>
       </div>
       {children}
     </div>
@@ -76,7 +76,7 @@ export function Ingresar() {
       </Tarjeta>
       <p className="text-center text-sm text-stone-600">
         ¿Eres constructor y no tienes cuenta?{" "}
-        <Link to="/registro" className="font-semibold text-marca-600">
+        <Link to="/registro" className="inline-flex min-h-10 items-center font-semibold text-marca-700 underline-offset-2 hover:underline">
           Crear cuenta
         </Link>
       </p>
@@ -142,7 +142,7 @@ export function Registro() {
       </Tarjeta>
       <p className="text-center text-sm text-stone-600">
         ¿Ya tienes cuenta?{" "}
-        <Link to="/ingresar" className="font-semibold text-marca-600">
+        <Link to="/ingresar" className="inline-flex min-h-10 items-center font-semibold text-marca-700 underline-offset-2 hover:underline">
           Entrar
         </Link>
       </p>

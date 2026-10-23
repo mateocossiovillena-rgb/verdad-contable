@@ -1,12 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import { dinero, fecha } from "../formato";
-import type { Actividad, Cronograma, Fase } from "../tipos";
+import { dinero, fecha, indice, leerMonto, pct } from "../formato";
+import type { Actividad, Cronograma, Fase, IndicadoresObra, Recurso, TipoRecurso } from "../tipos";
+import { Curva } from "../componentes/Curva";
 import { Gantt } from "../componentes/Gantt";
 import { Marco } from "../componentes/Marco";
-import { Boton, BotonEnlace, Campo, Cargando, Entrada, MensajeError, Selector, Tarjeta } from "../componentes/ui";
+import {
+  IconoAbajo,
+  IconoAdelante,
+  IconoArriba,
+  IconoBasura,
+  IconoCerrar,
+  IconoCierre,
+  IconoLadrillos,
+  IconoLapiz,
+  IconoMas,
+  IconoRecibo,
+} from "../componentes/iconos";
+import {
+  Boton,
+  BotonEnlace,
+  BotonIcono,
+  Campo,
+  Cargando,
+  Entrada,
+  MensajeError,
+  Metrica,
+  Pestanas,
+  Pildora,
+  PildoraSemaforo,
+  Selector,
+  Tarjeta,
+  TONO_SEMAFORO,
+  type Tono,
+} from "../componentes/ui";
+import { useIndicadores } from "./Partidas";
 
 const FASES_SUGERIDAS = ["Obra gruesa", "Instalaciones", "Acabados"];
 
@@ -31,58 +61,243 @@ function useCambio(obraId: string | undefined) {
   });
 }
 
-/** Página de la obra: datos, línea de tiempo y edición de fases y actividades. */
+type Vista = "resumen" | "cronograma";
+
+/** Página de la obra: resumen de valor ganado y cronograma con fases y actividades. */
 export function DetalleObra() {
   const { obraId } = useParams();
+  const [parametros, setParametros] = useSearchParams();
+  const vista: Vista = parametros.get("vista") === "cronograma" ? "cronograma" : "resumen";
   const cronograma = useCronograma(obraId);
   const c = cronograma.data;
 
   return (
-    <Marco titulo={c?.obra.nombre ?? "Obra"} volver="/obras">
-      {cronograma.isLoading && <Cargando />}
-      <MensajeError error={cronograma.error} />
-      {c && (
+    <Marco
+      titulo={c?.obra.nombre ?? "Obra"}
+      volver="/obras"
+      ancho
+      accion={
+        <Link
+          to={`/obras/${obraId}/editar`}
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100"
+          aria-label="Editar obra"
+          title="Editar obra"
+        >
+          <IconoLapiz />
+        </Link>
+      }
+    >
+      <Pestanas<Vista>
+        opciones={[
+          { valor: "resumen", texto: "Resumen" },
+          { valor: "cronograma", texto: "Cronograma" },
+        ]}
+        activa={vista}
+        cambiar={(v) => setParametros(v === "resumen" ? {} : { vista: v }, { replace: true })}
+      />
+      {vista === "resumen" ? (
+        <Resumen obraId={obraId!} />
+      ) : (
         <>
-          <Tarjeta className="space-y-2">
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-              <Dato titulo="Cliente" valor={c.obra.cliente || "—"} />
-              <Dato titulo="Ubicación" valor={c.obra.ubicacion || "—"} />
-              <Dato titulo="Inicio" valor={fecha(c.obra.fecha_inicio)} />
-              <Dato titulo="Fin según cronograma" valor={fecha(c.obra.fecha_fin)} />
-              <Dato titulo="Presupuesto total" valor={dinero(c.obra.presupuesto_total, c.obra.moneda)} />
-              <Dato titulo="Moneda" valor={c.obra.moneda} />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <BotonEnlace a={`/obras/${obraId}/editar`} variante="secundario" className="flex-1">
-                ✏️ Editar obra
-              </BotonEnlace>
-              <BotonEnlace a={`/obras/${obraId}/hoy`} variante="secundario" className="flex-1">
-                📋 Registro de hoy
-              </BotonEnlace>
-            </div>
-          </Tarjeta>
+          {cronograma.isLoading && <Cargando />}
+          <MensajeError error={cronograma.error} reintentar={() => cronograma.refetch()} />
+          {c && (
+            <>
+              <Tarjeta>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+                  <Dato titulo="Cliente" valor={c.obra.cliente || "—"} />
+                  <Dato titulo="Ubicación" valor={c.obra.ubicacion || "—"} />
+                  <Dato titulo="Moneda" valor={c.obra.moneda} />
+                  <Dato titulo="Inicio" valor={fecha(c.obra.fecha_inicio)} />
+                  <Dato titulo="Fin según cronograma" valor={fecha(c.obra.fecha_fin)} />
+                  <Dato titulo="Presupuesto total" valor={dinero(c.obra.presupuesto_total, c.obra.moneda)} />
+                  <Dato titulo="Mano de obra (actividades)" valor={dinero(c.costo_mano_obra, c.obra.moneda)} />
+                  <Dato titulo="Materiales (actividades)" valor={dinero(c.costo_materiales, c.obra.moneda)} />
+                  <Dato titulo="Costo total de actividades" valor={dinero(c.costo_total, c.obra.moneda)} />
+                </div>
+              </Tarjeta>
 
-          <Tarjeta>
-            <h2 className="mb-3 font-semibold">Línea de tiempo</h2>
-            <Gantt cronograma={c} />
-          </Tarjeta>
+              <Tarjeta>
+                <h2 className="mb-3 font-semibold text-stone-900">Línea de tiempo</h2>
+                <Gantt cronograma={c} />
+              </Tarjeta>
 
-          <h2 className="pt-2 text-lg font-semibold">Fases y actividades</h2>
-          {c.fases.map((f, i) => (
-            <TarjetaFase key={f.id} obraId={obraId!} cronograma={c} fase={f} posicion={i} />
-          ))}
-          <NuevaFase obraId={obraId!} existentes={c.fases.map((f) => f.nombre)} />
+              <h2 className="pt-2 text-lg font-semibold tracking-tight text-stone-900">Fases y actividades</h2>
+              {c.fases.map((f, i) => (
+                <TarjetaFase key={f.id} obraId={obraId!} cronograma={c} fase={f} posicion={i} />
+              ))}
+              <NuevaFase obraId={obraId!} existentes={c.fases.map((f) => f.nombre)} />
+            </>
+          )}
         </>
       )}
     </Marco>
   );
 }
 
+/** Tono de un índice (SPI o CPI) con los mismos umbrales de alerta de la obra. */
+function tonoIndice(valor: number | null, d: IndicadoresObra): Tono {
+  if (valor === null) return "neutro";
+  if (valor < d.obra.umbral_rojo) return "problema";
+  if (valor < d.obra.umbral_amarillo) return "atencion";
+  return "bien";
+}
+
+const TEXTO_TONO: Record<Tono, string> = { bien: "Bien", atencion: "Atención", problema: "Problema", neutro: "Sin datos" };
+
+/** Responde en una frase y con tres cifras: ¿voy atrasado?, ¿cuánto gasté?, ¿cuánto costará al final? */
+function Resumen({ obraId }: { obraId: string }) {
+  const datos = useIndicadores(obraId);
+  const d = datos.data;
+  if (datos.isLoading) return <Cargando filas={3} />;
+  if (!d) return <MensajeError error={datos.error} reintentar={() => datos.refetch()} />;
+
+  const i = d.indicadores;
+  const m = d.obra.moneda;
+  const tono = TONO_SEMAFORO[d.semaforo];
+  const borde: Record<Tono, string> = {
+    bien: "border-l-emerald-600",
+    atencion: "border-l-amber-500",
+    problema: "border-l-red-600",
+    neutro: "border-l-stone-300",
+  };
+  const indices: { sigla: string; valor: string; tono: Tono; explicacion: string }[] = [
+    {
+      sigla: "SPI",
+      valor: indice(i.spi),
+      tono: tonoIndice(i.spi, d),
+      explicacion: "Cronograma: menos de 1 = vas atrasado.",
+    },
+    {
+      sigla: "CPI",
+      valor: indice(i.cpi),
+      tono: tonoIndice(i.cpi, d),
+      explicacion: "Costo: menos de 1 = gastas más de lo que avanzas.",
+    },
+    {
+      sigla: "SV",
+      valor: dinero(i.sv, m),
+      tono: i.pv === 0 ? "neutro" : i.sv < 0 ? "atencion" : "bien",
+      explicacion: "Lo avanzado menos lo planificado, en dinero.",
+    },
+    {
+      sigla: "CV",
+      valor: dinero(i.cv, m),
+      tono: i.ac === 0 ? "neutro" : i.cv < 0 ? "atencion" : "bien",
+      explicacion: "Lo avanzado menos lo gastado, en dinero.",
+    },
+  ];
+
+  return (
+    <div className="space-y-4 lg:grid lg:grid-cols-5 lg:gap-4 lg:space-y-0">
+      <div className="space-y-4 lg:col-span-3">
+        <Tarjeta className={`space-y-2 border-l-4 ${borde[tono]}`}>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm tabular-nums text-stone-600">Al {fecha(d.corte)}</span>
+            <PildoraSemaforo valor={d.semaforo} />
+          </div>
+          <p className="text-base leading-relaxed text-stone-900">{d.frases.join(" ")}</p>
+          {d.advertencias.map((a) => (
+            <p key={a.codigo} className="text-sm text-amber-800">
+              {a.mensaje}
+            </p>
+          ))}
+        </Tarjeta>
+
+        <Tarjeta className="grid gap-4 sm:grid-cols-3">
+          <Metrica
+            etiqueta="Avance real"
+            valor={pct(i.avance_real)}
+            detalle={`Debería: ${pct(i.avance_planificado)} · Según lo gastado: ${pct(i.avance_esperado_por_gasto)}`}
+          />
+          <Metrica etiqueta="Gastado" valor={dinero(i.ac, m)} detalle={`de ${dinero(i.bac, m)} presupuestado`} />
+          <Metrica
+            etiqueta="Costo final estimado"
+            valor={dinero(i.eac, m)}
+            detalle={
+              i.eac !== null && i.bac > 0
+                ? i.eac > i.bac
+                  ? `${dinero(i.eac - i.bac, m)} sobre el presupuesto`
+                  : "Dentro del presupuesto"
+                : "Falta avance o gasto para estimar"
+            }
+          />
+        </Tarjeta>
+
+        <Tarjeta>
+          <h2 className="mb-3 font-semibold text-stone-900">Curva de avance y gasto</h2>
+          <Curva puntos={d.curva} hitos={d.hitos} corte={d.corte} />
+        </Tarjeta>
+      </div>
+
+      <div className="space-y-4 lg:col-span-2">
+        <div className="grid grid-cols-2 gap-3">
+          <BotonEnlace a={`/obras/${obraId}/hoy`} className="col-span-2">
+            <IconoCierre />
+            Registro de hoy
+          </BotonEnlace>
+          <BotonEnlace a={`/obras/${obraId}/partidas`} variante="secundario">
+            <IconoLadrillos />
+            Partidas
+          </BotonEnlace>
+          <BotonEnlace a={`/obras/${obraId}/gastos`} variante="secundario">
+            <IconoRecibo />
+            Gastos
+          </BotonEnlace>
+        </div>
+
+        <Tarjeta className="p-0">
+          <h2 className="px-4 pb-1 pt-4 font-semibold text-stone-900">Índices de valor ganado</h2>
+          <ul className="divide-y divide-stone-100">
+            {indices.map((x) => (
+              <li key={x.sigla} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-stone-900">{x.sigla}</div>
+                  <div className="text-sm text-stone-600">{x.explicacion}</div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="font-semibold tabular-nums text-stone-900">{x.valor}</span>
+                  <Pildora tono={x.tono}>{TEXTO_TONO[x.tono]}</Pildora>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Tarjeta>
+
+        {d.partidas.length > 0 && (
+          <Tarjeta className="p-0">
+            <div className="flex items-center justify-between px-4 pb-1 pt-4">
+              <h2 className="font-semibold text-stone-900">Partidas</h2>
+              <Link to={`/obras/${obraId}/partidas`} className="inline-flex items-center gap-1 text-sm font-medium text-stone-700 hover:text-stone-900">
+                Ver todas <IconoAdelante tamano={16} />
+              </Link>
+            </div>
+            <ul className="divide-y divide-stone-100">
+              {d.partidas
+                .filter((p) => !p.partida.es_generales)
+                .slice(0, 6)
+                .map((p) => (
+                  <li key={p.partida.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <span className="min-w-0 truncate text-sm text-stone-800">{p.partida.nombre}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-sm tabular-nums text-stone-700">{Math.round(p.porcentaje_avance)} %</span>
+                      <PildoraSemaforo valor={p.semaforo} />
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </Tarjeta>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Dato({ titulo, valor }: { titulo: string; valor: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-stone-500">{titulo}</div>
-      <div className="truncate font-medium">{valor}</div>
+      <div className="text-stone-600">{titulo}</div>
+      <div className="truncate font-medium tabular-nums text-stone-900">{valor}</div>
     </div>
   );
 }
@@ -105,17 +320,18 @@ function NuevaFase({ obraId, existentes }: { obraId: string; existentes: string[
       >
         <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre de la nueva fase" />
         <Boton type="submit" disabled={cambio.isPending || !nombre.trim()} className="shrink-0">
-          + Fase
+          <IconoMas tamano={18} />
+          Fase
         </Boton>
       </form>
       {existentes.length === 0 && sugeridas.length > 0 && (
         <div className="flex flex-wrap gap-2 text-sm">
-          <span className="text-stone-500">Sugeridas:</span>
+          <span className="text-stone-600">Sugeridas:</span>
           {sugeridas.map((s) => (
             <button
               key={s}
               type="button"
-              className="rounded-full bg-marca-50 px-3 py-1 text-marca-700 ring-1 ring-marca-100"
+              className="min-h-10 rounded-full border border-stone-300 bg-white px-3 font-medium text-stone-800 hover:bg-stone-50"
               onClick={() => crear(s)}
               disabled={cambio.isPending}
             >
@@ -169,18 +385,23 @@ function TarjetaFase({
           <Boton type="submit" disabled={cambio.isPending} className="shrink-0">
             Guardar
           </Boton>
-          <Boton type="button" variante="secundario" onClick={() => setRenombrando(false)} className="shrink-0">
-            ✕
-          </Boton>
+          <BotonIcono titulo="Cancelar" onClick={() => setRenombrando(false)} className="h-12 w-12">
+            <IconoCerrar />
+          </BotonIcono>
         </form>
       ) : (
         <div className="flex items-center gap-1">
-          <h3 className="flex-1 truncate font-semibold">{fase.nombre}</h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate font-semibold text-stone-900">{fase.nombre}</h3>
+            {fase.costo_total > 0 && (
+              <div className="text-sm tabular-nums text-stone-600">{dinero(fase.costo_total, cronograma.obra.moneda)}</div>
+            )}
+          </div>
           <BotonIcono titulo="Subir" onClick={() => mover(-1)} disabled={posicion === 0 || cambio.isPending}>
-            ↑
+            <IconoArriba />
           </BotonIcono>
           <BotonIcono titulo="Bajar" onClick={() => mover(1)} disabled={posicion === ids.length - 1 || cambio.isPending}>
-            ↓
+            <IconoAbajo />
           </BotonIcono>
           <BotonIcono
             titulo="Renombrar"
@@ -189,16 +410,16 @@ function TarjetaFase({
               setRenombrando(true);
             }}
           >
-            ✏️
+            <IconoLapiz tamano={18} />
           </BotonIcono>
           <BotonIcono titulo="Borrar fase" onClick={() => setConfirmarBorrar(true)}>
-            🗑️
+            <IconoBasura tamano={18} />
           </BotonIcono>
         </div>
       )}
 
       {confirmarBorrar && (
-        <div className="space-y-2 rounded-xl bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
+        <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
           <p>
             ¿Borrar la fase «{fase.nombre}»
             {fase.actividades.length > 0 && ` y sus ${fase.actividades.length} actividad(es)`}?
@@ -220,7 +441,7 @@ function TarjetaFase({
       <MensajeError error={cambio.error} />
 
       {fase.actividades.length === 0 && formulario === null && (
-        <p className="text-sm text-stone-500">Sin actividades todavía.</p>
+        <p className="text-sm text-stone-600">Sin actividades todavía.</p>
       )}
       <ul className="divide-y divide-stone-100">
         {fase.actividades.map((a) =>
@@ -243,28 +464,11 @@ function TarjetaFase({
         <FormActividad obraId={obraId} cronograma={cronograma} faseId={fase.id} alTerminar={() => setFormulario(null)} />
       ) : (
         <Boton variante="secundario" className="w-full" onClick={() => setFormulario("nueva")}>
-          + Actividad
+          <IconoMas tamano={18} />
+          Actividad
         </Boton>
       )}
     </Tarjeta>
-  );
-}
-
-function BotonIcono({
-  titulo,
-  children,
-  ...props
-}: { titulo: string; children: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      title={titulo}
-      aria-label={titulo}
-      className="flex h-9 w-9 items-center justify-center rounded-lg text-stone-600 hover:bg-stone-100 disabled:opacity-30"
-      {...props}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -281,18 +485,25 @@ function FilaActividad({
   return (
     <li className="flex items-center gap-2 py-2">
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{a.nombre}</div>
-        <div className="text-xs text-stone-500">
+        <div className="truncate font-medium text-stone-900">{a.nombre}</div>
+        <div className="text-sm tabular-nums text-stone-600">
           {a.duracion_dias} día(s) · {fecha(a.fecha_inicio)} – {fecha(a.fecha_fin)}
         </div>
         {a.predecesoras.length > 0 && (
-          <div className="truncate text-xs text-stone-500">
+          <div className="truncate text-sm text-stone-600">
             Después de: {a.predecesoras.map((p) => nombres.get(p)).join(", ")}
+          </div>
+        )}
+        {a.costo_total > 0 && (
+          <div className="text-sm tabular-nums text-stone-600">
+            M. obra {dinero(a.costo_mano_obra, cronograma.obra.moneda)} · Materiales{" "}
+            {dinero(a.costo_materiales, cronograma.obra.moneda)} ·{" "}
+            <span className="font-semibold text-stone-900">{dinero(a.costo_total, cronograma.obra.moneda)}</span>
           </div>
         )}
       </div>
       <BotonIcono titulo="Editar actividad" onClick={alEditar}>
-        ✏️
+        <IconoLapiz tamano={18} />
       </BotonIcono>
     </li>
   );
@@ -318,6 +529,8 @@ function FormActividad({
   const [predecesoras, setPredecesoras] = useState<number[]>(actividad?.predecesoras ?? []);
   const [fase, setFase] = useState(faseId);
   const [confirmarBorrar, setConfirmarBorrar] = useState(false);
+  const [recursos, setRecursos] = useState<FilaRecurso[]>(() => (actividad?.recursos ?? []).map(aFila));
+  const dias = Number(duracion) || 0;
 
   const alternar = (id: number) =>
     setPredecesoras(predecesoras.includes(id) ? predecesoras.filter((p) => p !== id) : [...predecesoras, id]);
@@ -330,6 +543,14 @@ function FormActividad({
       inicio_manual: predecesoras.length ? null : inicio || null,
       predecesoras,
       ...(actividad && { fase_id: fase }),
+      recursos: recursos.map((r) => ({
+        tipo: r.tipo,
+        descripcion: r.descripcion,
+        unidad: r.unidad,
+        cantidad: leerMonto(r.cantidad),
+        precio_unitario: leerMonto(r.precio_unitario),
+        por_dia: r.por_dia,
+      })),
     };
     const pedido = actividad
       ? { ruta: `/api/actividades/${actividad.id}`, metodo: "PUT", cuerpo }
@@ -342,7 +563,7 @@ function FormActividad({
     .filter((g) => g.actividades.length > 0);
 
   return (
-    <form onSubmit={enviar} className="space-y-3 rounded-xl bg-stone-50 p-3 ring-1 ring-stone-200">
+    <form onSubmit={enviar} className="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
       <Campo etiqueta="Actividad">
         <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Muros de ladrillo" required autoFocus />
       </Campo>
@@ -367,13 +588,13 @@ function FormActividad({
       )}
       {opciones.length > 0 && (
         <fieldset>
-          <legend className="mb-1 text-sm font-medium text-stone-700">Empieza después de (predecesoras)</legend>
-          <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl bg-white p-2 ring-1 ring-stone-200">
+          <legend className="mb-1 text-sm font-medium text-stone-800">Empieza después de (predecesoras)</legend>
+          <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-stone-200 bg-white p-2">
             {opciones.map((g) => (
               <div key={g.fase.id}>
-                <div className="text-xs font-semibold uppercase tracking-wide text-stone-400">{g.fase.nombre}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">{g.fase.nombre}</div>
                 {g.actividades.map((a) => (
-                  <label key={a.id} className="flex min-h-9 items-center gap-2 text-sm">
+                  <label key={a.id} className="flex min-h-10 items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       className="h-5 w-5 accent-marca-600"
@@ -381,19 +602,30 @@ function FormActividad({
                       onChange={() => alternar(a.id)}
                     />
                     <span className="flex-1 truncate">{a.nombre}</span>
-                    <span className="text-xs text-stone-400">termina {fecha(a.fecha_fin)}</span>
+                    <span className="text-xs tabular-nums text-stone-500">termina {fecha(a.fecha_fin)}</span>
                   </label>
                 ))}
               </div>
             ))}
           </div>
           {predecesoras.length > 0 && (
-            <p className="mt-1 text-xs text-stone-500">
+            <p className="mt-1 text-xs text-stone-600">
               El inicio se calcula solo: el día después de que termine la última predecesora.
             </p>
           )}
         </fieldset>
       )}
+      <SeccionRecursos tipo="mano_obra" filas={recursos} cambiar={setRecursos} dias={dias} moneda={cronograma.obra.moneda} />
+      <SeccionRecursos tipo="material" filas={recursos} cambiar={setRecursos} dias={dias} moneda={cronograma.obra.moneda} />
+      <div className="flex justify-between rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm">
+        <span className="text-stone-600">Costo de la actividad</span>
+        <span className="font-semibold tabular-nums text-stone-900">
+          {dinero(
+            recursos.reduce((suma, r) => suma + costoFila(r, dias), 0),
+            cronograma.obra.moneda,
+          )}
+        </span>
+      </div>
       <MensajeError error={cambio.error} />
       <div className="flex flex-wrap gap-2">
         <Boton type="submit" disabled={cambio.isPending}>
@@ -415,10 +647,173 @@ function FormActividad({
             </Boton>
           ) : (
             <Boton type="button" variante="secundario" className="ml-auto" onClick={() => setConfirmarBorrar(true)}>
-              🗑️ Borrar
+              <IconoBasura tamano={18} />
+              Borrar
             </Boton>
           ))}
       </div>
     </form>
+  );
+}
+
+// --- Mano de obra y materiales de la actividad ---
+
+interface FilaRecurso {
+  clave: string;
+  tipo: TipoRecurso;
+  descripcion: string;
+  unidad: string;
+  cantidad: string;
+  precio_unitario: string;
+  por_dia: boolean;
+}
+
+let siguienteClave = 0;
+const nuevaClave = () => `r${++siguienteClave}`;
+
+function aFila(r: Recurso): FilaRecurso {
+  return {
+    clave: nuevaClave(),
+    tipo: r.tipo,
+    descripcion: r.descripcion,
+    unidad: r.unidad,
+    cantidad: String(r.cantidad),
+    precio_unitario: String(r.precio_unitario),
+    por_dia: r.por_dia,
+  };
+}
+
+function filaVacia(tipo: TipoRecurso): FilaRecurso {
+  const base = { clave: nuevaClave(), tipo, descripcion: "", unidad: "", precio_unitario: "" };
+  // La mano de obra arranca con 1 persona pagada por día (jornal), lo más común en obra.
+  return tipo === "mano_obra" ? { ...base, cantidad: "1", por_dia: true } : { ...base, cantidad: "", por_dia: false };
+}
+
+/** Lo mismo que calcula el servidor, para mostrar el subtotal mientras se escribe. */
+function costoFila(r: FilaRecurso, dias: number): number {
+  const cantidad = Number(leerMonto(r.cantidad) ?? 0) || 0;
+  const precio = Number(leerMonto(r.precio_unitario) ?? 0) || 0;
+  const costo = cantidad * precio * (r.tipo === "mano_obra" && r.por_dia ? dias : 1);
+  return Math.round(costo * 100) / 100;
+}
+
+function SeccionRecursos({
+  tipo,
+  filas,
+  cambiar,
+  dias,
+  moneda,
+}: {
+  tipo: TipoRecurso;
+  filas: FilaRecurso[];
+  cambiar: (filas: FilaRecurso[]) => void;
+  dias: number;
+  moneda: string;
+}) {
+  const propias = filas.filter((f) => f.tipo === tipo);
+  const esManoObra = tipo === "mano_obra";
+  const actualizar = (clave: string, cambios: Partial<FilaRecurso>) =>
+    cambiar(filas.map((f) => (f.clave === clave ? { ...f, ...cambios } : f)));
+  const subtotal = propias.reduce((suma, f) => suma + costoFila(f, dias), 0);
+
+  return (
+    <fieldset className="space-y-2">
+      <legend className="mb-1 flex w-full justify-between text-sm font-medium text-stone-800">
+        <span>{esManoObra ? "Mano de obra" : "Materiales"}</span>
+        {propias.length > 0 && <span className="tabular-nums text-stone-600">{dinero(subtotal, moneda)}</span>}
+      </legend>
+      {propias.map((f) => (
+        <div key={f.clave} className="space-y-2 rounded-xl border border-stone-200 bg-white p-2">
+          <div className="flex gap-2">
+            <Entrada
+              value={f.descripcion}
+              onChange={(e) => actualizar(f.clave, { descripcion: e.target.value })}
+              placeholder={esManoObra ? "Cargo (ej. Albañil)" : "Material (ej. Cemento)"}
+              aria-label={esManoObra ? "Cargo" : "Material"}
+              required
+            />
+            <BotonIcono titulo="Quitar" onClick={() => cambiar(filas.filter((x) => x.clave !== f.clave))} className="h-12 w-12">
+              <IconoCerrar />
+            </BotonIcono>
+          </div>
+          {esManoObra ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Campo etiqueta="Personas">
+                <Entrada
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  step={1}
+                  value={f.cantidad}
+                  onChange={(e) => actualizar(f.clave, { cantidad: e.target.value })}
+                  required
+                />
+              </Campo>
+              <Campo etiqueta="Costo por persona">
+                <Entrada
+                  inputMode="decimal"
+                  value={f.precio_unitario}
+                  onChange={(e) => actualizar(f.clave, { precio_unitario: e.target.value })}
+                  placeholder="0,00"
+                  required
+                />
+              </Campo>
+              <Campo etiqueta="Se paga (jornal o destajo)">
+                <Selector
+                  value={f.por_dia ? "dia" : "total"}
+                  onChange={(e) => actualizar(f.clave, { por_dia: e.target.value === "dia" })}
+                >
+                  <option value="dia">Por día</option>
+                  <option value="total">Por la actividad</option>
+                </Selector>
+              </Campo>
+              <Subtotal valor={costoFila(f, dias)} moneda={moneda} detalle={f.por_dia ? `× ${dias} día(s)` : undefined} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <Campo etiqueta="Cantidad">
+                <Entrada
+                  inputMode="decimal"
+                  value={f.cantidad}
+                  onChange={(e) => actualizar(f.clave, { cantidad: e.target.value })}
+                  placeholder="0"
+                  required
+                />
+              </Campo>
+              <Campo etiqueta="Unidad">
+                <Entrada
+                  value={f.unidad}
+                  onChange={(e) => actualizar(f.clave, { unidad: e.target.value })}
+                  placeholder="bolsa, m³…"
+                />
+              </Campo>
+              <Campo etiqueta="Precio unitario">
+                <Entrada
+                  inputMode="decimal"
+                  value={f.precio_unitario}
+                  onChange={(e) => actualizar(f.clave, { precio_unitario: e.target.value })}
+                  placeholder="0,00"
+                  required
+                />
+              </Campo>
+              <Subtotal valor={costoFila(f, dias)} moneda={moneda} />
+            </div>
+          )}
+        </div>
+      ))}
+      <Boton type="button" variante="secundario" className="w-full" onClick={() => cambiar([...filas, filaVacia(tipo)])}>
+        <IconoMas tamano={18} />
+        {esManoObra ? "Agregar mano de obra" : "Agregar material"}
+      </Boton>
+    </fieldset>
+  );
+}
+
+function Subtotal({ valor, moneda, detalle }: { valor: number; moneda: string; detalle?: string }) {
+  return (
+    <div className="flex flex-col justify-end text-right">
+      <span className="text-xs text-stone-600">Subtotal{detalle && ` ${detalle}`}</span>
+      <span className="flex min-h-12 items-center justify-end font-semibold tabular-nums text-stone-900">{dinero(valor, moneda)}</span>
+    </div>
   );
 }

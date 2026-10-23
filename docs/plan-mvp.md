@@ -92,6 +92,12 @@ Fuera del MVP: marketplace de insumos, cotizaciones de subcontratistas, compras 
 - Cálculo en `backend/app/calculos/cronograma.py` (sin base de datos, con tests): orden topológico +
   paso hacia adelante del CPM.
 - Pantalla de la obra: datos, línea de tiempo (Gantt por fase con marca de hoy) y editor de fases/actividades.
+- **Mano de obra y materiales por actividad** (`recurso_actividad`), en el mismo formulario de la actividad:
+  - Mano de obra: cargo, personas y costo por persona, pagado **por día** (jornal: × duración de la actividad)
+    o **por la actividad** (destajo: no cambia con la duración).
+  - Materiales: descripción, cantidad, unidad y precio unitario → cantidad × precio.
+  - Costo por actividad (mano de obra, materiales, total), por fase y por obra, en la moneda de la obra.
+    Cálculo en `backend/app/calculos/costos.py`, redondeado al centavo.
 
 ## 7. Próximos pasos (preparados en el modelo, sin implementar)
 
@@ -103,11 +109,9 @@ Fuera del MVP: marketplace de insumos, cotizaciones de subcontratistas, compras 
 4. Mostrar la ruta crítica en rojo en el Gantt y la holgura de cada actividad.
 5. Opcional: calendario laboral (días hábiles, feriados de Bolivia) en lugar de días calendario.
 
-**Recursos con precio unitario por actividad**
-1. Tabla nueva `recurso_actividad`: id, actividad_id (→ `actividad.id`, borrado en cascada),
-   tipo (`material`, `mano_obra`, `equipo`), descripción, unidad (m³, bolsa, jornal, hora…),
-   cantidad `NUMERIC(14,3)`, precio_unitario `NUMERIC(14,2)` en la moneda de la obra.
-2. Costo de la actividad = Σ cantidad × precio unitario; costo de la fase y de la obra = suma.
-3. Comparar ese costo con `obra.presupuesto_total` y, más adelante, con los gastos reales.
-4. Unir actividades con partidas (EVM): cada actividad aporta su costo como BAC y sus fechas como PV,
+**Costos de las actividades (mano de obra y materiales ya están)**
+1. Equipo y maquinaria (mezcladora, vibradora, volqueta): nuevo valor `equipo` en `recurso_actividad.tipo`,
+   con pago por día o por la actividad como la mano de obra.
+2. Comparar el costo de las actividades con `obra.presupuesto_total` (aviso si lo supera).
+3. Unir actividades con partidas (EVM): cada actividad aporta su costo como BAC y sus fechas como PV,
    para que "gasté vs. debería" salga del mismo cronograma.

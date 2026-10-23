@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
-import { hoyISO } from "../formato";
+import { hoyISO, leerMonto } from "../formato";
 import type { Moneda, Obra } from "../tipos";
 import { Marco } from "../componentes/Marco";
 import { Boton, Campo, Cargando, Entrada, MensajeError, Selector, Tarjeta } from "../componentes/ui";
@@ -24,13 +24,6 @@ const VACIO: Formulario = {
   moneda: "Bs",
   presupuesto_total: "",
 };
-
-/** Acepta "85.000,50", "85000.50" o "85000". */
-function leerMonto(texto: string): string | null {
-  const limpio = texto.replace(/\s/g, "");
-  if (!limpio) return null;
-  return limpio.includes(",") ? limpio.replace(/\./g, "").replace(",", ".") : limpio;
-}
 
 /** Crear o editar una obra. Sin :obraId crea una nueva. */
 export function FormObra() {
@@ -82,7 +75,13 @@ export function FormObra() {
     guardar.mutate();
   }
 
-  if (editando && obra.isLoading) return <Cargando />;
+  if (editando && obra.isLoading) {
+    return (
+      <Marco titulo="Editar obra" volver={`/obras/${obraId}`}>
+        <Cargando filas={1} />
+      </Marco>
+    );
+  }
 
   return (
     <Marco titulo={editando ? "Editar obra" : "Nueva obra"} volver={editando ? `/obras/${obraId}` : "/obras"}>
@@ -116,7 +115,7 @@ export function FormObra() {
               placeholder="0,00"
             />
           </Campo>
-          <p className="text-xs text-stone-500">
+          <p className="text-sm text-stone-600">
             La fecha de fin se calcula sola con las actividades del cronograma.
           </p>
           <MensajeError error={guardar.error ?? obra.error} />

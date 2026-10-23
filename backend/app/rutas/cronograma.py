@@ -1,14 +1,18 @@
-"""Cronograma de la obra: fases, actividades y predecesoras.
+"""Cronograma de la obra: fases, actividades, predecesoras y su mano de obra y materiales.
 
 Toda operación que cambia algo devuelve el cronograma completo ya recalculado,
 así la línea de tiempo del celular se actualiza con una sola petición.
 """
+
+from collections import defaultdict
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import servicios
+from app.calculos import costos
 from app.calculos import cronograma as cr
 from app.db import obtener_sesion
 from app.esquemas import (
@@ -19,8 +23,10 @@ from app.esquemas import (
     FaseSalida,
     ObraSalida,
     OrdenFases,
+    RecursoEntrada,
+    RecursoSalida,
 )
-from app.modelos import Actividad, Dependencia, Fase, Obra, Usuario
+from app.modelos import Actividad, Dependencia, Fase, Obra, RecursoActividad, Usuario
 from app.seguridad import obra_propia, obra_visible, solo_dueno, usuario_actual
 
 rutas = APIRouter(prefix="/api", tags=["cronograma"])
@@ -30,8 +36,19 @@ def _cronograma(sesion: Session, obra: Obra) -> Cronograma:
     fases = list(sesion.scalars(select(Fase).where(Fase.obra_id == obra.id).order_by(Fase.orden, Fase.id)))
     enlaces = servicios.predecesoras_por_actividad(sesion, obra.id)
     actividades = sorted(servicios.actividades_de_obra(sesion, obra.id), key=lambda a: (a.orden, a.id))
+    recursos: dict[int, list[RecursoActividad]] = defaultdict(list)
+    for r in sesion.scalars(
+        select(RecursoActividad)
+        .join(Actividad)
+        .where(Actividad.obra_id == obra.id)
+        .order_by(RecursoActividad.orden, RecursoActividad.id)
+    ):
+        recursos[r.actividad_id].append(r)
+
     por_fase: dict[int, list[ActividadSalida]] = {f.id: [] for f in fases}
     for a in actividades:
+        datos = {r.id: _datos_recurso(r) for r in recursos[a.id]}
+        costo = costos.costo_actividad(datos.values(), a.duracion_dias)
         por_fase[a.fase_id].append(
             ActividadSalida(
                 id=a.id,
@@ -43,15 +60,63 @@ def _cronograma(sesion: Session, obra: Obra) -> Cronograma:
                 fecha_fin=a.fecha_fin,
                 orden=a.orden,
                 predecesoras=sorted(d.predecesora_id for d in enlaces.get(a.id, [])),
+                recursos=[
+                    RecursoSalida(
+                        id=r.id,
+                        tipo=r.tipo,
+                        descripcion=r.descripcion,
+                        unidad=r.unidad,
+                        cantidad=float(r.cantidad),
+                        precio_unitario=r.precio_unitario,
+                        por_dia=r.por_dia,
+                        costo=costos.costo_recurso(datos[r.id], a.duracion_dias),
+                    )
+                    for r in recursos[a.id]
+                ],
+                costo_mano_obra=costo.mano_obra,
+                costo_materiales=costo.materiales,
+                costo_total=costo.total,
             )
         )
+    todas = [a for lista in por_fase.values() for a in lista]
     return Cronograma(
         obra=ObraSalida.model_validate(obra),
         hoy=servicios.hoy(),
         fecha_inicio=min([obra.fecha_inicio] + [a.fecha_inicio for a in actividades]),
         fecha_fin=obra.fecha_fin,
-        fases=[FaseSalida(id=f.id, nombre=f.nombre, orden=f.orden, actividades=por_fase[f.id]) for f in fases],
+        fases=[
+            FaseSalida(
+                id=f.id,
+                nombre=f.nombre,
+                orden=f.orden,
+                actividades=por_fase[f.id],
+                costo_total=sum((a.costo_total for a in por_fase[f.id]), Decimal("0")),
+            )
+            for f in fases
+        ],
+        costo_mano_obra=sum((a.costo_mano_obra for a in todas), Decimal("0")),
+        costo_materiales=sum((a.costo_materiales for a in todas), Decimal("0")),
+        costo_total=sum((a.costo_total for a in todas), Decimal("0")),
     )
+
+
+def _datos_recurso(r: RecursoActividad) -> costos.DatosRecurso:
+    return costos.DatosRecurso(tipo=r.tipo, cantidad=r.cantidad, precio_unitario=r.precio_unitario, por_dia=r.por_dia)
+
+
+def _recursos(entrada: list[RecursoEntrada]) -> list[RecursoActividad]:
+    return [
+        RecursoActividad(
+            tipo=r.tipo,
+            descripcion=r.descripcion.strip(),
+            unidad=r.unidad.strip() if r.tipo == "material" else "",
+            cantidad=r.cantidad,
+            precio_unitario=r.precio_unitario,
+            por_dia=r.por_dia,
+            orden=posicion,
+        )
+        for posicion, r in enumerate(entrada)
+    ]
 
 
 def _guardar(sesion: Session, obra: Obra) -> Cronograma:
@@ -171,6 +236,7 @@ def crear_actividad(
         fecha_fin=cr.fin_de(inicio, datos.duracion_dias),
         orden=orden,
         predecesoras=[Dependencia(predecesora_id=p) for p in datos.predecesoras],
+        recursos=_recursos(datos.recursos or []),
     )
     sesion.add(actividad)
     return _guardar(sesion, obra)
@@ -194,6 +260,8 @@ def editar_actividad(
     actividad.duracion_dias = datos.duracion_dias
     actividad.inicio_manual = datos.inicio_manual
     actividad.predecesoras = [Dependencia(predecesora_id=p, sucesora_id=actividad.id) for p in datos.predecesoras]
+    if datos.recursos is not None:
+        actividad.recursos = _recursos(datos.recursos)
     return _guardar(sesion, obra)
 
 

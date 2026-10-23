@@ -1,11 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../api";
-import { bs, fecha, indice, pct } from "../formato";
+import { bs, dinero, fecha, indice, pct } from "../formato";
 import { useSesion } from "../sesion";
 import type { ObraResumen } from "../tipos";
 import { Marco } from "../componentes/Marco";
-import { BarraAvance, BotonEnlace, Cargando, MensajeError, PuntoSemaforo, Tarjeta } from "../componentes/ui";
+import { IconoAdelante, IconoCampana, IconoMas, IconoObras } from "../componentes/iconos";
+import {
+  BarraAvance,
+  BotonEnlace,
+  Cargando,
+  EstadoVacio,
+  MensajeError,
+  Metrica,
+  PildoraSemaforo,
+  Tarjeta,
+} from "../componentes/ui";
 
 export function useObras() {
   return useQuery({ queryKey: ["obras"], queryFn: () => api<ObraResumen[]>("/api/obras") });
@@ -28,24 +38,32 @@ export function MisObras() {
   return (
     <Marco titulo={esDueno ? "Mis obras" : "Elige la obra"}>
       {obras.isLoading && <Cargando />}
-      <MensajeError error={obras.error} />
-      {obras.data?.length === 0 &&
-        (esDueno ? (
-          <Tarjeta className="text-center">
-            <p className="mb-4 text-stone-600">Todavía no tienes obras. Crea la primera para empezar.</p>
-            <BotonEnlace a="/obras/nueva" grande>
-              + Nueva obra
-            </BotonEnlace>
-          </Tarjeta>
-        ) : (
-          <Tarjeta>No tienes obras asignadas. Pide al dueño que te asigne una.</Tarjeta>
-        ))}
+      <MensajeError error={obras.error} reintentar={() => obras.refetch()} />
+      {obras.data?.length === 0 && (
+        <Tarjeta>
+          {esDueno ? (
+            <EstadoVacio
+              icono={<IconoObras tamano={32} />}
+              texto="Todavía no tienes obras. Crea la primera para empezar."
+              accion={
+                <BotonEnlace a="/obras/nueva">
+                  <IconoMas />
+                  Nueva obra
+                </BotonEnlace>
+              }
+            />
+          ) : (
+            <EstadoVacio icono={<IconoObras tamano={32} />} texto="No tienes obras asignadas. Pide al dueño que te asigne una." />
+          )}
+        </Tarjeta>
+      )}
       {obras.data?.map((o) =>
         esDueno ? <TarjetaObraDueno key={o.id} obra={o} /> : <TarjetaObraEncargado key={o.id} obra={o} />,
       )}
       {esDueno && obras.data && obras.data.length > 0 && (
         <BotonEnlace a="/obras/nueva" variante="secundario" className="w-full">
-          + Nueva obra
+          <IconoMas />
+          Nueva obra
         </BotonEnlace>
       )}
     </Marco>
@@ -53,42 +71,51 @@ export function MisObras() {
 }
 
 function TarjetaObraDueno({ obra }: { obra: ObraResumen }) {
+  const presupuesto = obra.presupuesto ?? obra.presupuesto_total;
   return (
-    <Link to={`/obras/${obra.id}`} className="block">
-      <Tarjeta className="space-y-3 transition hover:ring-marca-500">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold">{obra.nombre}</h2>
-            <p className="text-sm text-stone-500">
+    <Link to={`/obras/${obra.id}`} className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca-500">
+      <Tarjeta tocable className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold tracking-tight text-stone-900">{obra.nombre}</h2>
+            <p className="text-sm text-stone-600">
               {obra.cliente && `${obra.cliente} · `}
               {obra.ubicacion && `${obra.ubicacion} · `}
-              {fecha(obra.fecha_inicio)} – {fecha(obra.fecha_fin)}
+              <span className="tabular-nums">
+                {fecha(obra.fecha_inicio)} – {fecha(obra.fecha_fin)}
+              </span>
             </p>
           </div>
-          <PuntoSemaforo valor={obra.semaforo} conTexto />
+          <PildoraSemaforo valor={obra.semaforo} />
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <div className="text-stone-500">Gastado</div>
-            <div className="font-semibold">{bs(obra.gastado)}</div>
-            <div className="text-xs text-stone-500">de {bs(obra.presupuesto)}</div>
-          </div>
-          <div>
-            <div className="text-stone-500">Hoy</div>
-            <div className="font-semibold">{bs(obra.gastado_hoy)}</div>
-          </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Metrica
+            etiqueta="Gastado"
+            valor={dinero(obra.gastado, obra.moneda)}
+            detalle={presupuesto ? `de ${dinero(presupuesto, obra.moneda)}` : "Sin presupuesto"}
+          />
+          <Metrica etiqueta="Hoy" valor={dinero(obra.gastado_hoy, obra.moneda)} />
         </div>
+
         <div>
-          <div className="mb-1 flex justify-between text-xs text-stone-600">
+          <div className="mb-1.5 flex justify-between text-sm tabular-nums text-stone-700">
             <span>Avance real {pct(obra.avance_real)}</span>
-            <span>Debería {pct(obra.avance_planificado)}</span>
+            <span className="text-stone-600">Debería {pct(obra.avance_planificado)}</span>
           </div>
-          <BarraAvance real={obra.avance_real ?? 0} plan={obra.avance_planificado} />
+          <BarraAvance real={obra.avance_real ?? 0} plan={obra.avance_planificado} semaforo={obra.semaforo} />
         </div>
-        <div className="flex gap-4 text-xs text-stone-600">
-          <span>SPI {indice(obra.spi)}</span>
-          <span>CPI {indice(obra.cpi)}</span>
-          {obra.alertas > 0 && <span className="font-semibold text-red-700">🔔 {obra.alertas} alerta(s)</span>}
+
+        <div className="flex items-center gap-4 border-t border-stone-100 pt-3 text-sm tabular-nums text-stone-600">
+          <span title="Índice de cronograma: menos de 1 = atrasado">SPI {indice(obra.spi)}</span>
+          <span title="Índice de costo: menos de 1 = gastando más de lo que avanza">CPI {indice(obra.cpi)}</span>
+          {obra.alertas > 0 && (
+            <span className="inline-flex items-center gap-1 font-medium text-red-700">
+              <IconoCampana tamano={16} />
+              {obra.alertas} alerta(s)
+            </span>
+          )}
+          <IconoAdelante tamano={18} className="ml-auto text-stone-400" />
         </div>
       </Tarjeta>
     </Link>
@@ -97,15 +124,15 @@ function TarjetaObraDueno({ obra }: { obra: ObraResumen }) {
 
 function TarjetaObraEncargado({ obra }: { obra: ObraResumen }) {
   return (
-    <Link to={`/obras/${obra.id}/hoy`} className="block">
-      <Tarjeta className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">{obra.nombre}</h2>
-          <p className="text-sm text-stone-500">{obra.ubicacion}</p>
+    <Link to={`/obras/${obra.id}/hoy`} className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca-500">
+      <Tarjeta tocable className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-lg font-semibold tracking-tight text-stone-900">{obra.nombre}</h2>
+          <p className="truncate text-sm text-stone-600">{obra.ubicacion}</p>
         </div>
         <div className="text-right">
-          <div className="text-xs text-stone-500">Hoy</div>
-          <div className="font-semibold">{bs(obra.gastado_hoy)}</div>
+          <div className="text-sm text-stone-600">Hoy</div>
+          <div className="font-semibold tabular-nums text-stone-900">{bs(obra.gastado_hoy)}</div>
         </div>
       </Tarjeta>
     </Link>

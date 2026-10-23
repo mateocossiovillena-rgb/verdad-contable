@@ -12,6 +12,7 @@ import { FormObra } from "./paginas/FormObra";
 import { Partidas } from "./paginas/Partidas";
 import { Gastos } from "./paginas/Gastos";
 import { Alertas } from "./paginas/Alertas";
+import { Cuenta } from "./paginas/Cuenta";
 
 const cliente = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,7 @@ export function App() {
             <Route path="/obras/:obraId/gasto" element={<ConSesion><NuevoGasto /></ConSesion>} />
             <Route path="/obras/:obraId/avance" element={<ConSesion><NuevoAvance /></ConSesion>} />
             <Route path="/obras/:obraId/cierre" element={<ConSesion><CierreDia /></ConSesion>} />
+            <Route path="/cuenta" element={<ConSesion><Cuenta /></ConSesion>} />
 
             <Route path="/obras/nueva" element={<SoloDueno><FormObra /></SoloDueno>} />
             <Route path="/obras/:obraId" element={<SoloDueno><DetalleObra /></SoloDueno>} />

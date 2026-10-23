@@ -155,6 +155,19 @@ export interface Alerta {
   mensaje: string;
 }
 
+export type TipoRecurso = "mano_obra" | "material";
+
+export interface Recurso {
+  id: number;
+  tipo: TipoRecurso;
+  descripcion: string;
+  unidad: string;
+  cantidad: number;
+  precio_unitario: number;
+  por_dia: boolean;
+  costo: number;
+}
+
 export interface Actividad {
   id: number;
   fase_id: number;
@@ -165,6 +178,10 @@ export interface Actividad {
   fecha_fin: string;
   orden: number;
   predecesoras: number[];
+  recursos: Recurso[];
+  costo_mano_obra: number;
+  costo_materiales: number;
+  costo_total: number;
 }
 
 export interface Fase {
@@ -172,6 +189,7 @@ export interface Fase {
   nombre: string;
   orden: number;
   actividades: Actividad[];
+  costo_total: number;
 }
 
 export interface Cronograma {
@@ -180,4 +198,7 @@ export interface Cronograma {
   fecha_inicio: string;
   fecha_fin: string;
   fases: Fase[];
+  costo_mano_obra: number;
+  costo_materiales: number;
+  costo_total: number;
 }
