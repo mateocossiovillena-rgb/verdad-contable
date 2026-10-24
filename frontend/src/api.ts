@@ -90,3 +90,13 @@ export async function descargar(ruta: string, nombre: string): Promise<void> {
   enlace.click();
   URL.revokeObjectURL(url);
 }
+
+/** Sube un archivo tal cual (sin base64): sirve para planos de varios MB. */
+export async function subirArchivo<T>(ruta: string, archivo: File): Promise<T> {
+  const respuesta = await pedir(ruta, {
+    method: "POST",
+    body: archivo,
+    headers: { "Content-Type": "application/octet-stream" },
+  });
+  return respuesta.json() as Promise<T>;
+}

@@ -202,3 +202,115 @@ export interface Cronograma {
   costo_materiales: number;
   costo_total: number;
 }
+
+// --- Estimación desde plano ---
+
+export type RolCapa = "muros" | "puertas" | "ventanas" | "ambientes" | "columnas" | "ignorar";
+export type PasoEstimacion = "capas" | "plantas" | "formulario" | "cantidades" | "confirmada";
+export type OrigenCantidad = "plano" | "formulario" | "proporcion" | "editada";
+
+export interface CapaPlano {
+  nombre: string;
+  lineas: number;
+  bloques: number;
+  arcos: number;
+  textos: number;
+  rol: RolCapa;
+  rol_sugerido: RolCapa;
+  recordada: boolean;
+}
+
+export interface PlantaPlano {
+  indice: number;
+  nombre: string;
+  incluir: boolean;
+  repeticiones: number;
+  ancho: number | null;
+  alto: number | null;
+  detalle: string;
+}
+
+export interface PisoMedido {
+  nombre: string;
+  repeticiones: number;
+  area_planta: number;
+  largo_muros: number;
+  perimetro_exterior: number;
+  ambientes: number;
+  banos: number;
+  cocinas: number;
+  puertas: number;
+  ventanas: number;
+}
+
+export interface CantidadObra {
+  clave: string;
+  rubro: string;
+  nombre: string;
+  piso: string | null;
+  unidad: string;
+  cantidad: number;
+  cantidad_original: number | null;
+  origen: OrigenCantidad;
+  origen_original: Exclude<OrigenCantidad, "editada"> | null;
+  detalle: string;
+}
+
+export interface FormularioPlano {
+  tipo_obra: "vivienda" | "departamentos" | "comercial";
+  altura_piso: number;
+  tipo_muro: "ladrillo_6h" | "bloque_cemento" | "adobe";
+  espesor_exterior: number;
+  espesor_interior: number;
+  losa: "alivianada" | "maciza" | "viguetas";
+  cubierta: "losa" | "calamina" | "teja";
+  fundacion: "zapatas" | "cimiento_corrido";
+  acabado: "economico" | "medio" | "alto";
+  piso: "ceramica" | "porcelanato" | "cemento";
+  banos: number | null;
+  cocinas: number | null;
+}
+
+export interface Estimacion {
+  id: number;
+  obra_id: number;
+  tipo_archivo: "dxf" | "ifc";
+  nombre_archivo: string;
+  paso: PasoEstimacion;
+  pasos: PasoEstimacion[];
+  unidades: number | null;
+  unidades_deducidas: boolean;
+  capas: CapaPlano[];
+  plantas: PlantaPlano[];
+  formulario: FormularioPlano | null;
+  datos_del_modelo: string[];
+  pisos_medidos: PisoMedido[];
+  cantidades: CantidadObra[];
+  avisos: string[];
+  creado_en: string;
+}
+
+export interface EstimacionResumen {
+  id: number;
+  tipo_archivo: "dxf" | "ifc";
+  nombre_archivo: string;
+  paso: PasoEstimacion;
+  creado_en: string;
+}
+
+/** Segmento [x1, y1, x2, y2] en metros, con el origen abajo a la izquierda. */
+export type Segmento = [number, number, number, number];
+
+export interface PlantaDibujada {
+  nombre: string;
+  ancho: number;
+  alto: number;
+  muros: Segmento[];
+  ambientes: { nombre: string; area: number; puntos: [number, number][] }[];
+  aberturas: { tipo: "puerta" | "ventana"; x: number; y: number; x2: number; y2: number }[];
+}
+
+export interface GeometriaPlano {
+  zonas: { indice: number; ancho: number; alto: number; muros: Segmento[] }[];
+  plantas: PlantaDibujada[];
+}

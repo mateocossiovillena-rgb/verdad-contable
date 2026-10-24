@@ -117,6 +117,18 @@ export function DetalleObra() {
                 </div>
               </Tarjeta>
 
+              <Tarjeta className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1 basis-60">
+                  <h2 className="font-semibold text-stone-900">Estimar desde plano</h2>
+                  <p className="text-sm text-stone-600">
+                    Sube el plano CAD (DXF) o BIM (IFC) y calcula las cantidades de la obra.
+                  </p>
+                </div>
+                <BotonEnlace a={`/obras/${obraId}/estimar`} variante="secundario">
+                  Subir plano
+                </BotonEnlace>
+              </Tarjeta>
+
               <Tarjeta>
                 <h2 className="mb-3 font-semibold text-stone-900">Línea de tiempo</h2>
                 <Gantt cronograma={c} />

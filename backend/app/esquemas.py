@@ -469,8 +469,9 @@ class CantidadSalida(BaseModel):
     piso: str | None
     unidad: str
     cantidad: float
-    cantidad_original: float | None
+    cantidad_original: float | None  # lo calculado, si se corrigió a mano
     origen: Literal["plano", "formulario", "proporcion", "editada"]
+    origen_original: Literal["plano", "formulario", "proporcion"] | None
     detalle: str
 
 

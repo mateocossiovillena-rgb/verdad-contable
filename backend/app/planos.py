@@ -270,9 +270,14 @@ def _cantidades_calculadas(estimacion: Estimacion) -> list[computos.Cantidad]:
 def cantidades(estimacion: Estimacion) -> list[dict]:
     salida = []
     for c in _cantidades_calculadas(estimacion):
-        fila = {**c.__dict__, "cantidad_original": None}
+        fila = {**c.__dict__, "cantidad_original": None, "origen_original": None}
         if c.clave in estimacion.ediciones:
-            fila.update(cantidad=estimacion.ediciones[c.clave], cantidad_original=c.cantidad, origen="editada")
+            fila.update(
+                cantidad=estimacion.ediciones[c.clave],
+                cantidad_original=c.cantidad,
+                origen_original=c.origen,
+                origen="editada",
+            )
         salida.append(fila)
     return salida
 
@@ -318,8 +323,23 @@ def salida(estimacion: Estimacion) -> dict:
     }
 
 
+_SINGULAR = {
+    "muros": "muro",
+    "losas": "losa",
+    "puertas": "puerta",
+    "ventanas": "ventana",
+    "columnas": "columna",
+    "vigas": "viga",
+    "ambientes": "ambiente",
+}
+
+
 def _detalle_piso(piso: dict) -> str:
-    partes = [f"{n} {t}" if t != "cubierta" else "cubierta" for t, n in piso["elementos"].items() if n]
+    """Qué trae un piso del modelo, en palabras: "4 muros, 1 puerta, cubierta"."""
+    partes = []
+    for tipo, n in piso["elementos"].items():
+        if n:
+            partes.append("cubierta" if tipo == "cubierta" else f"{n} {_SINGULAR.get(tipo, tipo) if n == 1 else tipo}")
     return ", ".join(partes) or "vacío"
 
 

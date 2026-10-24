@@ -70,14 +70,12 @@ Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mis
   - [ ] Próximos: ruta crítica (CPM), equipo, comparar con presupuesto → docs/plan-mvp.md §7
   - [ ] Estimación desde plano CAD/BIM + formulario → pasos del proyecto y ruta crítica (propuesta)
         → docs/plan-estimacion-planos.md (orden: C0 ruta crítica → E0 → E1…)
-    - [ ] EN CURSO: subir plano DXF (CAD) o IFC (BIM); formulario solo para CAD. Lectores propios, sin
-          librerías externas (licencias). Hecho: `calculos/plano_dxf.py`, `calculos/medicion_plano.py`,
-          `calculos/plano_ifc.py`, `calculos/computos.py`, planos de prueba en `tests/planos_prueba.py`,
-          tablas `Estimacion` y `MapeoCapa` en modelos.py, `CARPETA_PLANOS` en config.
-          Falta: migración Alembic, `app/planos.py` + `rutas/estimaciones.py` (subir con cuerpo binario
-          `?nombre=`, capas+unidades, plantas, formulario solo dxf, cantidades con ediciones, geometría),
-          tests, página `EstimarObra` + `VistaPlano` + `TablaCantidades`, botón en Cronograma.
-          Después: generar cronograma y ruta crítica desde las cantidades.
+    - [x] Subir plano DXF (CAD) o IFC (BIM) y confirmar capas/unidades, plantas, formulario (solo CAD) y
+          cantidades editables. Lectores propios sin librerías externas (licencias): `calculos/plano_dxf.py`,
+          `medicion_plano.py`, `plano_ifc.py`, `computos.py`; servicio `app/planos.py`; API
+          `rutas/estimaciones.py`; pantalla `EstimarObra` (botón en Cronograma); 84 tests.
+    - [ ] Siguiente: generar cronograma y ruta crítica desde las cantidades (C0/E0); revisar con un plano
+          real de un constructor (calibrar valores típicos de `computos.py`).
   - [ ] Íconos PNG, prueba en celular real
   - [ ] Dockerfile, CI (GitHub Actions), README con instrucciones
 - [ ] Fase 3: piloto con 2 constructores

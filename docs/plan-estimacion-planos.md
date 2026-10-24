@@ -1,6 +1,7 @@
 # Plan de implementación — Estimación desde plano CAD/BIM + formulario
 
-Fecha: 23/10/2026 · Estado: **propuesta, sin implementar**.
+Fecha: 23/10/2026 · Estado: **pasos 1 a 5 implementados** (subir DXF o IFC → cantidades confirmadas). Falta el
+paso 6, generar el cronograma y la ruta crítica (C0/E0). Ver §3.1 con lo que cambió al construirlo.
 
 ## 1. Objetivo
 
@@ -55,6 +56,29 @@ bien.
 
 El asistente guarda el avance en cada paso (estado de la estimación en el servidor): se puede cerrar y
 retomar.
+
+### 3.1 Cómo quedó implementado (23/10/2026)
+
+- **El formulario es solo para CAD.** Un IFC trae alturas, espesores y materiales: el modelo responde el
+  formulario y lo que no trae se completa con valores típicos (origen *proporción*). Flujos:
+  - CAD (`.dxf`): Capas y unidades → Plantas → Datos de la obra → Cantidades → Confirmada.
+  - BIM (`.ifc`): Pisos → Cantidades → Confirmada.
+- **Orden CAD:** primero capas y unidades (sin saber cuáles son muros no se pueden separar las plantas),
+  después las plantas: la app separa las zonas dibujadas una al lado de la otra y el constructor marca cuáles
+  son plantas, les pone nombre y cuántas veces se repiten.
+- **Lectores propios** de DXF ASCII e IFC (STEP), sin librerías externas, para no depender de licencias
+  (`calculos/plano_dxf.py`, `calculos/plano_ifc.py`). DWG, Revit, SketchUp y PDF se rechazan con un mensaje
+  que dice cómo exportar.
+- **Vanos:** se asume que en el plano los muros vienen cortados en puertas y ventanas; al área de muro se le
+  suman dinteles y antepechos (alto típico de puerta 2,10 m y de ventana 1,20 m si el nombre del bloque no lo
+  dice, ej. `V120x100`).
+- **Datos:** una tabla `estimacion` con columnas JSON (lectura, capas, plantas, formulario, medición,
+  ediciones) en vez de varias tablas; las cantidades se calculan al leer y solo se guardan las correcciones a
+  mano, por clave (`rubro` o `rubro:piso`). `mapeo_capa` recuerda el rol de cada capa por dueño.
+- **Planos confidenciales:** se guardan con nombre aleatorio en `backend/planos/` (fuera de git), nunca se
+  sirven de vuelta y se borran al borrar la estimación.
+- API en `rutas/estimaciones.py`; pantalla `paginas/EstimarObra.tsx` con `VistaPlano` y `TablaCantidades`.
+  Las cuadrillas y la fecha de inicio se preguntarán en el paso 6 (generar), igual para CAD y BIM.
 
 ## 4. Formulario complementario
 

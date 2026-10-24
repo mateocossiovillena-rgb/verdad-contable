@@ -13,6 +13,7 @@ import { Partidas } from "./paginas/Partidas";
 import { Gastos } from "./paginas/Gastos";
 import { Alertas } from "./paginas/Alertas";
 import { Cuenta } from "./paginas/Cuenta";
+import { EstimarObra } from "./paginas/EstimarObra";
 
 const cliente = new QueryClient({
   defaultOptions: {
@@ -59,6 +60,7 @@ export function App() {
             <Route path="/obras/:obraId/editar" element={<SoloDueno><FormObra /></SoloDueno>} />
             <Route path="/obras/:obraId/partidas" element={<SoloDueno><Partidas /></SoloDueno>} />
             <Route path="/obras/:obraId/gastos" element={<SoloDueno><Gastos /></SoloDueno>} />
+            <Route path="/obras/:obraId/estimar" element={<SoloDueno><EstimarObra /></SoloDueno>} />
             <Route path="/alertas" element={<SoloDueno><Alertas /></SoloDueno>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
