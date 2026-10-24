@@ -45,6 +45,11 @@ def _cronograma(sesion: Session, obra: Obra) -> Cronograma:
     ):
         recursos[r.actividad_id].append(r)
 
+    datos_cpm = servicios.datos_cronograma(
+        actividades, {a: [(d.predecesora_id, d.desfase_dias) for d in deps] for a, deps in enlaces.items()}
+    )
+    holguras = cr.calcular_holguras(datos_cpm, {a.id: cr.Fechas(a.fecha_inicio, a.fecha_fin) for a in actividades})
+
     por_fase: dict[int, list[ActividadSalida]] = {f.id: [] for f in fases}
     for a in actividades:
         datos = {r.id: _datos_recurso(r) for r in recursos[a.id]}
@@ -60,6 +65,8 @@ def _cronograma(sesion: Session, obra: Obra) -> Cronograma:
                 fecha_fin=a.fecha_fin,
                 orden=a.orden,
                 predecesoras=sorted(d.predecesora_id for d in enlaces.get(a.id, [])),
+                holgura_dias=holguras[a.id].dias,
+                critica=holguras[a.id].critica,
                 recursos=[
                     RecursoSalida(
                         id=r.id,
@@ -259,7 +266,12 @@ def editar_actividad(
     actividad.nombre = datos.nombre.strip()
     actividad.duracion_dias = datos.duracion_dias
     actividad.inicio_manual = datos.inicio_manual
-    actividad.predecesoras = [Dependencia(predecesora_id=p, sucesora_id=actividad.id) for p in datos.predecesoras]
+    # Las predecesoras que siguen conservan su espera (ej. días de fraguado de una estimación).
+    desfases = {d.predecesora_id: d.desfase_dias for d in actividad.predecesoras}
+    actividad.predecesoras = [
+        Dependencia(predecesora_id=p, sucesora_id=actividad.id, desfase_dias=desfases.get(p, 0))
+        for p in datos.predecesoras
+    ]
     if datos.recursos is not None:
         actividad.recursos = _recursos(datos.recursos)
     return _guardar(sesion, obra)

@@ -1,26 +1,31 @@
 """Asistente "Estimar desde plano": une los lectores de planos y los cómputos con la base de datos.
 
-CAD (dxf): capas y unidades → plantas → formulario → cantidades → confirmada.
-BIM (ifc): plantas → cantidades → confirmada. El modelo responde el formulario, por eso no se pregunta.
+CAD (dxf): capas y unidades → plantas → formulario → cantidades → confirmada → generada.
+BIM (ifc): plantas → cantidades → confirmada → generada. El modelo responde el formulario, por eso no se pregunta.
+"Generada" quiere decir que con las cantidades ya se armó el cronograma de la obra.
 """
 
 from __future__ import annotations
 
 import uuid
+from datetime import date
+from decimal import Decimal
 from functools import lru_cache
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config
+from app import config, servicios
 from app.calculos import computos, medicion_plano
+from app.calculos import estimacion as generador
 from app.calculos.plano_dxf import Dibujo, PlanoInvalido, leer_dxf
 from app.calculos.plano_ifc import leer_ifc
-from app.modelos import Estimacion, MapeoCapa, Obra, Usuario
+from app.modelos import Actividad, Dependencia, Estimacion, Fase, MapeoCapa, Obra, RecursoActividad, Usuario
 
-PASOS_DXF = ("capas", "plantas", "formulario", "cantidades", "confirmada")
-PASOS_IFC = ("plantas", "cantidades", "confirmada")
+PASOS_DXF = ("capas", "plantas", "formulario", "cantidades", "confirmada", "generada")
+PASOS_IFC = ("plantas", "cantidades", "confirmada", "generada")
+SUFIJO_AGREGADO = " (estimado)"
 _OTROS_FORMATOS = {
     ".dwg": "El archivo DWG no se puede leer directo. Ábrelo en tu programa de dibujo y guárdalo como DXF.",
     ".rvt": "El archivo de Revit no se puede leer directo. Expórtalo a IFC desde Revit y súbelo de nuevo.",
@@ -241,11 +246,164 @@ def aplicar_cantidades(sesion: Session, estimacion: Estimacion, ediciones: dict[
     """Guarda las correcciones a mano. Las claves que ya no existen se descartan."""
     _exigir_paso(estimacion, "cantidades")
     claves = {c.clave for c in _cantidades_calculadas(estimacion)}
-    estimacion.ediciones = {k: round(v, 2) for k, v in ediciones.items() if k in claves}
+    nuevas = {k: round(v, 2) for k, v in ediciones.items() if k in claves}
+    sin_cambios = nuevas == estimacion.ediciones
+    estimacion.ediciones = nuevas
     if confirmar:
-        estimacion.paso = "confirmada"
-    elif estimacion.paso == "confirmada":
+        # Si ya se generó el cronograma y no cambió nada, sigue generada.
+        estimacion.paso = "generada" if estimacion.paso == "generada" and sin_cambios else "confirmada"
+    elif estimacion.paso in ("confirmada", "generada") and not sin_cambios:
         estimacion.paso = "cantidades"
+    sesion.commit()
+
+
+# --- Cronograma ---
+
+
+def ejecucion_inicial(estimacion: Estimacion, obra: Obra) -> dict:
+    """Lo último que se usó para generar, o valores típicos desde el inicio de la obra."""
+    return estimacion.ejecucion or {
+        "fecha_inicio": obra.fecha_inicio.isoformat(),
+        "dias_semana": 6,
+        "entrega_deseada": None,
+        "cuadrillas": {},
+        "subcontratos": [],
+    }
+
+
+def _ejecucion(datos: dict) -> generador.Ejecucion:
+    entrega = datos.get("entrega_deseada")
+    return generador.Ejecucion(
+        fecha_inicio=date.fromisoformat(str(datos["fecha_inicio"])),
+        dias_semana=datos.get("dias_semana", 6),
+        entrega_deseada=date.fromisoformat(str(entrega)) if entrega else None,
+        cuadrillas=dict(datos.get("cuadrillas") or {}),
+        subcontratos=frozenset(datos.get("subcontratos") or []),
+    )
+
+
+def propuesta(estimacion: Estimacion, ejecucion: dict) -> generador.Propuesta:
+    """Pasos, fechas y ruta crítica con las cantidades confirmadas, sin guardar nada."""
+    _exigir_paso(estimacion, "confirmada")
+    pisos = [p["medido"] for p in estimacion.medicion["pisos"]]
+    cantidades = [
+        generador.CantidadRubro(c["rubro"], c["piso"], c["cantidad"], c["unidad"]) for c in cantidades_de(estimacion)
+    ]
+    terreno = max((p["area_planta"] for p in pisos), default=0.0)
+    return generador.proponer(
+        cantidades,
+        [p["nombre"] for p in pisos],
+        terreno,
+        computos.Formulario.desde_dict(estimacion.formulario),
+        _ejecucion(ejecucion),
+    )
+
+
+def propuesta_salida(plan: generador.Propuesta, ejecucion: dict, actividades_actuales: int) -> dict:
+    return {
+        "ejecucion": ejecucion,
+        "pasos": [
+            {
+                **{
+                    k: getattr(p, k)
+                    for k in (
+                        "clave",
+                        "nombre",
+                        "fase",
+                        "oficio",
+                        "cantidad",
+                        "unidad",
+                        "dias_trabajo",
+                        "duracion_dias",
+                        "personas",
+                        "inicio",
+                        "fin",
+                        "holgura_dias",
+                        "critica",
+                        "costo_mano_obra",
+                        "costo_materiales",
+                    )
+                },
+                "predecesoras": [
+                    {"clave": e.predecesora, "desfase_dias": e.desfase_dias, "origen": e.origen} for e in p.predecesoras
+                ],
+            }
+            for p in plan.pasos
+        ],
+        "fases": plan.fases,
+        "oficios": [o.__dict__ for o in plan.oficios],
+        "inicio": plan.inicio,
+        "fin": plan.fin,
+        "dias_calendario": plan.dias_calendario,
+        "entrega_deseada": plan.entrega_deseada,
+        "dias_de_retraso": plan.dias_de_retraso,
+        "costo_mano_obra": plan.costo_mano_obra,
+        "costo_materiales": plan.costo_materiales,
+        "costo_total": plan.costo_mano_obra + plan.costo_materiales,
+        "sugerencias": [x.__dict__ for x in plan.sugerencias],
+        "actividades_actuales": actividades_actuales,
+    }
+
+
+def generar(sesion: Session, estimacion: Estimacion, obra: Obra, ejecucion: dict, modo: str) -> None:
+    """Crea fases, actividades, predecesoras y recursos en el cronograma de la obra.
+
+    reemplazar: borra el cronograma actual. agregar: suma las fases con " (estimado)" al final del nombre.
+    """
+    plan = propuesta(estimacion, ejecucion)
+    existentes = list(sesion.scalars(select(Fase).where(Fase.obra_id == obra.id)))
+    if modo == "reemplazar":
+        for fase in existentes:
+            sesion.delete(fase)
+        sesion.flush()
+        orden_base = 0
+    else:
+        orden_base = max((f.orden for f in existentes), default=-1) + 1
+
+    sufijo = SUFIJO_AGREGADO if modo == "agregar" else ""
+    fases = {
+        nombre: Fase(obra_id=obra.id, nombre=(nombre + sufijo)[:120], orden=orden_base + i)
+        for i, nombre in enumerate(plan.fases)
+    }
+    sesion.add_all(fases.values())
+    sesion.flush()
+    inicio = _ejecucion(ejecucion).fecha_inicio
+    actividades: dict[str, Actividad] = {}
+    for orden, paso in enumerate(plan.pasos):
+        a = Actividad(
+            obra_id=obra.id,
+            fase_id=fases[paso.fase].id,
+            nombre=paso.nombre[:160],
+            duracion_dias=paso.duracion_dias,
+            # Sin predecesoras empieza en la fecha elegida (si no es la de la obra).
+            inicio_manual=None if paso.predecesoras or inicio == obra.fecha_inicio else inicio,
+            fecha_inicio=paso.inicio,
+            fecha_fin=paso.fin,
+            orden=orden,
+            recursos=[
+                RecursoActividad(
+                    tipo=r.tipo,
+                    descripcion=r.descripcion,
+                    unidad=r.unidad,
+                    cantidad=Decimal(str(r.cantidad)),
+                    precio_unitario=Decimal(str(r.precio_unitario)),
+                    por_dia=r.por_dia,
+                    orden=i,
+                )
+                for i, r in enumerate(paso.recursos)
+            ],
+        )
+        actividades[paso.clave] = a
+        sesion.add(a)
+    sesion.flush()
+    for paso in plan.pasos:
+        actividades[paso.clave].predecesoras = [
+            Dependencia(predecesora_id=actividades[e.predecesora].id, desfase_dias=e.desfase_dias)
+            for e in paso.predecesoras
+        ]
+    servicios.recalcular_cronograma(sesion, obra)
+    estimacion.ejecucion = ejecucion
+    estimacion.paso = "generada"
     sesion.commit()
 
 
@@ -267,7 +425,7 @@ def _cantidades_calculadas(estimacion: Estimacion) -> list[computos.Cantidad]:
     return computos.calcular(pisos, computos.Formulario.desde_dict(estimacion.formulario), origen)
 
 
-def cantidades(estimacion: Estimacion) -> list[dict]:
+def cantidades_de(estimacion: Estimacion) -> list[dict]:
     salida = []
     for c in _cantidades_calculadas(estimacion):
         fila = {**c.__dict__, "cantidad_original": None, "origen_original": None}
@@ -317,7 +475,8 @@ def salida(estimacion: Estimacion) -> dict:
         "formulario": estimacion.formulario,
         "datos_del_modelo": lectura.get("datos_del_modelo", []),
         "pisos_medidos": [_resumen_medido(m) for m in medidos],
-        "cantidades": cantidades(estimacion),
+        "cantidades": cantidades_de(estimacion),
+        "ejecucion": estimacion.ejecucion,
         "avisos": lectura.get("avisos", []) + (estimacion.medicion or {}).get("avisos", []),
         "creado_en": estimacion.creado_en,
     }

@@ -1,3 +1,7 @@
+from datetime import date
+
+import pytest
+
 from app import config
 from tests.planos_prueba import casa_dxf, casa_ifc
 from tests.test_api import crear_obra
@@ -17,7 +21,7 @@ def test_flujo_cad_pide_formulario(cliente, dueno):
     assert r.status_code == 201, r.text
     e = r.json()
     assert e["paso"] == "capas"
-    assert e["pasos"] == ["capas", "plantas", "formulario", "cantidades", "confirmada"]
+    assert e["pasos"] == ["capas", "plantas", "formulario", "cantidades", "confirmada", "generada"]
     assert e["unidades"] == 5 and not e["unidades_deducidas"]
     roles = {c["nombre"]: c["rol"] for c in e["capas"]}
     assert roles["A-MURO"] == "muros"
@@ -75,7 +79,7 @@ def test_flujo_bim_sin_formulario(cliente, dueno):
     assert r.status_code == 201, r.text
     e = r.json()
     assert e["paso"] == "plantas"
-    assert e["pasos"] == ["plantas", "cantidades", "confirmada"]
+    assert e["pasos"] == ["plantas", "cantidades", "confirmada", "generada"]
     assert e["capas"] == []
     assert "altura_piso" in e["datos_del_modelo"]
     assert [p["nombre"] for p in e["plantas"]] == ["Planta baja", "Planta alta"]
@@ -159,3 +163,135 @@ def test_otro_dueno_no_ve_la_estimacion(cliente, dueno):
     otro = {"Authorization": f"Bearer {r.json()['token']}"}
     assert cliente.get(f"/api/estimaciones/{e['id']}", headers=otro).status_code == 404
     assert subir(cliente, otro, obra["id"], "casa.dxf", casa_dxf()).status_code == 404
+
+
+def _confirmada_ifc(cliente, dueno, obra_id):
+    e = subir(cliente, dueno, obra_id, "casa.ifc", casa_ifc()).json()
+    e = cliente.put(f"/api/estimaciones/{e['id']}/plantas", json=e["plantas"], headers=dueno).json()
+    r = cliente.put(f"/api/estimaciones/{e['id']}/cantidades", json={"confirmar": True}, headers=dueno)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _confirmada_dxf(cliente, dueno, obra_id):
+    e = subir(cliente, dueno, obra_id, "casa.dxf", casa_dxf()).json()
+    capas = {c["nombre"]: c["rol"] for c in e["capas"]}
+    e = cliente.put(f"/api/estimaciones/{e['id']}/capas", json={"capas": capas, "unidades": 5}, headers=dueno).json()
+    plantas = [{**p, "nombre": n} for p, n in zip(e["plantas"], ["Planta baja", "Planta alta"], strict=True)]
+    e = cliente.put(f"/api/estimaciones/{e['id']}/plantas", json=plantas, headers=dueno).json()
+    e = cliente.put(f"/api/estimaciones/{e['id']}/formulario", json={}, headers=dueno).json()
+    return cliente.put(f"/api/estimaciones/{e['id']}/cantidades", json={"confirmar": True}, headers=dueno).json()
+
+
+def _generar(cliente, dueno, e, modo):
+    propuesta = cliente.get(f"/api/estimaciones/{e['id']}/propuesta", headers=dueno).json()
+    r = cliente.post(
+        f"/api/estimaciones/{e['id']}/generar", json={**propuesta["ejecucion"], "modo": modo}, headers=dueno
+    )
+    assert r.status_code == 200, r.text
+    return propuesta, r.json()
+
+
+def test_propuesta_de_cronograma_sin_guardar(cliente, dueno):
+    obra = crear_obra(cliente, dueno)
+    e = subir(cliente, dueno, obra["id"], "casa.dxf", casa_dxf()).json()
+    assert cliente.get(f"/api/estimaciones/{e['id']}/propuesta", headers=dueno).status_code == 409
+
+    e = _confirmada_ifc(cliente, dueno, obra["id"])
+    r = cliente.get(f"/api/estimaciones/{e['id']}/propuesta", headers=dueno)
+    assert r.status_code == 200, r.text
+    p = r.json()
+    assert p["ejecucion"]["fecha_inicio"] == obra["fecha_inicio"]
+    assert p["ejecucion"]["dias_semana"] == 6
+    assert p["pasos"][0]["clave"] == "preliminares" and p["pasos"][-1]["clave"] == "entrega"
+    assert p["pasos"][-1]["critica"]
+    assert p["costo_total"] == pytest.approx(p["costo_mano_obra"] + p["costo_materiales"])
+    assert p["actividades_actuales"] == 0
+
+    # Con otra fecha y más cuadrillas, sin guardar.
+    cuerpo = {
+        "fecha_inicio": "2027-01-04",
+        "dias_semana": 5,
+        "entrega_deseada": "2027-02-01",
+        "cuadrillas": {"albanileria": 2},
+    }
+    r = cliente.post(f"/api/estimaciones/{e['id']}/propuesta", json=cuerpo, headers=dueno)
+    assert r.status_code == 200, r.text
+    otra = r.json()
+    assert otra["inicio"] == "2027-01-04"
+    assert otra["dias_de_retraso"] == (date.fromisoformat(otra["fin"]) - date(2027, 2, 1)).days
+    assert next(o for o in otra["oficios"] if o["clave"] == "albanileria")["cuadrillas"] == 2
+    assert cliente.get(f"/api/estimaciones/{e['id']}", headers=dueno).json()["ejecucion"] is None
+
+    malo = {**cuerpo, "entrega_deseada": "2026-01-01"}
+    assert cliente.post(f"/api/estimaciones/{e['id']}/propuesta", json=malo, headers=dueno).status_code == 422
+    malo = {**cuerpo, "cuadrillas": {"astronautas": 1}}
+    assert cliente.post(f"/api/estimaciones/{e['id']}/propuesta", json=malo, headers=dueno).status_code == 422
+
+
+def test_generar_crea_el_cronograma_con_ruta_critica(cliente, dueno):
+    obra = crear_obra(cliente, dueno)
+    e = _confirmada_ifc(cliente, dueno, obra["id"])
+    propuesta, e = _generar(cliente, dueno, e, "reemplazar")
+    assert e["paso"] == "generada"
+    assert e["ejecucion"]["dias_semana"] == 6
+
+    crono = cliente.get(f"/api/obras/{obra['id']}/cronograma", headers=dueno).json()
+    assert [f["nombre"] for f in crono["fases"]] == propuesta["fases"]
+    actividades = {a["nombre"]: a for f in crono["fases"] for a in f["actividades"]}
+    assert len(actividades) == len(propuesta["pasos"])
+    # Mismas fechas y ruta crítica que la vista previa, y el fin de la obra es la entrega.
+    for paso in propuesta["pasos"]:
+        a = actividades[paso["nombre"]]
+        assert (a["fecha_inicio"], a["fecha_fin"], a["critica"]) == (paso["inicio"], paso["fin"], paso["critica"])
+    assert crono["fecha_fin"] == propuesta["fin"]
+    muros = next(a for n, a in actividades.items() if n.startswith("Muros"))
+    assert any(r["descripcion"] == "Albañil" and r["por_dia"] for r in muros["recursos"])
+    assert crono["costo_total"] == pytest.approx(propuesta["costo_total"])
+
+    # Agregar suma fases "(estimado)"; volver a reemplazar deja una sola copia.
+    _generar(cliente, dueno, e, "agregar")
+    crono = cliente.get(f"/api/obras/{obra['id']}/cronograma", headers=dueno).json()
+    assert len(crono["fases"]) == 2 * len(propuesta["fases"])
+    assert crono["fases"][-1]["nombre"].endswith(" (estimado)")
+    _generar(cliente, dueno, e, "reemplazar")
+    crono = cliente.get(f"/api/obras/{obra['id']}/cronograma", headers=dueno).json()
+    assert len(crono["fases"]) == len(propuesta["fases"])
+
+
+def test_editar_actividad_generada_conserva_el_fraguado(cliente, dueno):
+    obra = crear_obra(cliente, dueno)
+    e = _confirmada_dxf(cliente, dueno, obra["id"])
+    _generar(cliente, dueno, e, "reemplazar")
+    crono = cliente.get(f"/api/obras/{obra['id']}/cronograma", headers=dueno).json()
+    actividades = {a["nombre"]: a for f in crono["fases"] for a in f["actividades"]}
+    columnas = actividades["Columnas de H°A° · Planta alta"]
+    losa = actividades["Vigas y losa de H°A° · Planta baja"]
+    r = cliente.put(
+        f"/api/actividades/{columnas['id']}",
+        json={
+            "nombre": "Columnas P1",
+            "duracion_dias": columnas["duracion_dias"] + 1,
+            "predecesoras": columnas["predecesoras"],
+        },
+        headers=dueno,
+    )
+    assert r.status_code == 200, r.text
+    editada = next(a for f in r.json()["fases"] for a in f["actividades"] if a["nombre"] == "Columnas P1")
+    assert losa["id"] in editada["predecesoras"]
+    assert editada["fecha_inicio"] == columnas["fecha_inicio"]  # sigue esperando el fraguado
+
+
+def test_corregir_cantidades_despues_de_generar(cliente, dueno):
+    obra = crear_obra(cliente, dueno)
+    e = _confirmada_ifc(cliente, dueno, obra["id"])
+    _generar(cliente, dueno, e, "agregar")
+    # Confirmar sin cambios la deja generada; con cambios vuelve a confirmada para generar de nuevo.
+    r = cliente.put(f"/api/estimaciones/{e['id']}/cantidades", json={"confirmar": True}, headers=dueno)
+    assert r.json()["paso"] == "generada"
+    r = cliente.put(
+        f"/api/estimaciones/{e['id']}/cantidades",
+        json={"ediciones": {"muros:Planta baja": 90}, "confirmar": True},
+        headers=dueno,
+    )
+    assert r.json()["paso"] == "confirmada"

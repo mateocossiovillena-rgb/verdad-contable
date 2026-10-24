@@ -9,6 +9,7 @@ from app.calculos.cronograma import (
     DependenciaCircular,
     Enlace,
     calcular_fechas,
+    calcular_holguras,
     fin_de,
     orden_topologico,
 )
@@ -56,6 +57,30 @@ class TestCalculoFechas:
     def test_orden_independiente_de_la_entrada(self):
         fechas = calcular_fechas([act(3, 1, 2), act(2, 1, 1), act(1, 1)], INICIO)
         assert [fechas[i].inicio.day for i in (1, 2, 3)] == [2, 3, 4]
+
+
+class TestRutaCritica:
+    def test_dos_caminos_uno_critico_y_otro_con_holgura(self):
+        # 1 → 2 (10 días) → 4 y 1 → 3 (3 días) → 4: el camino por 3 puede atrasarse 7 días.
+        datos = [act(1, 2), act(2, 10, 1), act(3, 3, 1), act(4, 1, 2, 3)]
+        h = calcular_holguras(datos, calcular_fechas(datos, INICIO))
+        assert {i: h[i].dias for i in h} == {1: 0, 2: 0, 3: 7, 4: 0}
+        assert sorted(i for i in h if h[i].critica) == [1, 2, 4]
+        assert h[3].inicio_tardio == date(2026, 3, 11)
+
+    def test_actividad_suelta_que_termina_antes(self):
+        datos = [act(1, 10), act(2, 4)]
+        h = calcular_holguras(datos, calcular_fechas(datos, INICIO))
+        assert (h[1].dias, h[2].dias) == (0, 6)
+
+    def test_el_desfase_cuenta_en_el_paso_hacia_atras(self):
+        datos = [act(1, 2), DatosActividad(2, 3, None, (Enlace(1, desfase_dias=7),)), act(3, 5)]
+        h = calcular_holguras(datos, calcular_fechas(datos, INICIO))
+        # 1 y 2 suman 2 + 7 + 3 = 12 días: la 3 (5 días) tiene 7 de holgura.
+        assert (h[1].dias, h[2].dias, h[3].dias) == (0, 0, 7)
+
+    def test_sin_actividades(self):
+        assert calcular_holguras([], {}) == {}
 
 
 class TestDependenciaCircular:
@@ -169,6 +194,14 @@ def test_actividades_y_fechas_por_predecesoras(cliente, dueno):
     assert (revoque["fecha_inicio"], revoque["fecha_fin"]) == ("2026-03-23", "2026-03-26")
     assert revoque["predecesoras"] == sorted([muros["id"], electrica["id"]])
     assert crono["fecha_fin"] == "2026-03-26"
+    # Ruta crítica: eléctrica → revoque. Cimientos y muros terminan el 16/03 y podrían atrasarse 6 días.
+    assert [(a["nombre"], a["holgura_dias"]) for f in crono["fases"] for a in f["actividades"]] == [
+        ("Cimientos", 6),
+        ("Muros", 6),
+        ("Eléctrica", 0),
+        ("Revoque", 0),
+    ]
+    assert actividad(crono, "Revoque")["critica"] and not actividad(crono, "Muros")["critica"]
     assert cliente.get(f"/api/obras/{obra['id']}", headers=dueno).json()["fecha_fin"] == "2026-03-26"
 
     # Al alargar cimientos se corre todo lo que depende de él.

@@ -365,6 +365,8 @@ class ActividadSalida(BaseModel):
     fecha_fin: date
     orden: int
     predecesoras: list[int]
+    holgura_dias: int = Field(description="Días que puede atrasarse sin mover el fin de la obra")
+    critica: bool = Field(description="En la ruta crítica (holgura 0)")
     recursos: list[RecursoSalida] = []
     costo_mano_obra: Dinero = Decimal("0")
     costo_materiales: Dinero = Decimal("0")
@@ -393,7 +395,19 @@ class Cronograma(BaseModel):
 # --- Estimación desde plano ---
 
 RolCapa = Literal["muros", "puertas", "ventanas", "ambientes", "columnas", "ignorar"]
-PasoEstimacion = Literal["capas", "plantas", "formulario", "cantidades", "confirmada"]
+PasoEstimacion = Literal["capas", "plantas", "formulario", "cantidades", "confirmada", "generada"]
+Oficio = Literal[
+    "tierras",
+    "estructura",
+    "albanileria",
+    "pisos",
+    "electricidad",
+    "plomeria",
+    "carpinteria",
+    "techo",
+    "pintura",
+    "limpieza",
+]
 
 
 class CapasEntrada(BaseModel):
@@ -491,6 +505,7 @@ class EstimacionSalida(BaseModel):
     pisos_medidos: list[PisoMedidoSalida]
     cantidades: list[CantidadSalida]
     avisos: list[str]
+    ejecucion: dict | None
     creado_en: datetime
 
 
@@ -500,3 +515,81 @@ class EstimacionResumen(Modelo):
     nombre_archivo: str
     paso: str
     creado_en: datetime
+
+
+class EjecucionEntrada(BaseModel):
+    fecha_inicio: date
+    dias_semana: Literal[5, 6, 7] = 6
+    entrega_deseada: date | None = None
+    cuadrillas: dict[Oficio, Annotated[int, Field(ge=1, le=10)]] = Field(default_factory=dict)
+    subcontratos: list[Oficio] = Field(default_factory=list, description="Oficios que no compiten por cuadrilla")
+
+    @model_validator(mode="after")
+    def _fechas(self):
+        if self.entrega_deseada and self.entrega_deseada <= self.fecha_inicio:
+            raise ValueError("La entrega deseada debe ser después del inicio")
+        return self
+
+
+class GenerarEntrada(EjecucionEntrada):
+    modo: Literal["reemplazar", "agregar"]
+
+
+class EnlacePasoSalida(BaseModel):
+    clave: str
+    desfase_dias: int
+    origen: Literal["tecnica", "cuadrilla"]
+
+
+class PasoSalida(BaseModel):
+    clave: str
+    nombre: str
+    fase: str
+    oficio: Oficio
+    cantidad: float | None
+    unidad: str
+    dias_trabajo: int
+    duracion_dias: int
+    personas: int
+    inicio: date
+    fin: date
+    holgura_dias: int
+    critica: bool
+    predecesoras: list[EnlacePasoSalida]
+    costo_mano_obra: Dinero
+    costo_materiales: Dinero
+
+
+class OficioSalida(BaseModel):
+    clave: Oficio
+    nombre: str
+    cuadrillas: int
+    subcontrato: bool
+    personas_por_cuadrilla: int
+    pasos: int
+    dias_trabajo: int
+    en_ruta_critica: bool
+
+
+class SugerenciaSalida(BaseModel):
+    oficio: Oficio
+    nombre: str
+    dias_menos: int
+    costo_extra: Dinero
+
+
+class PropuestaSalida(BaseModel):
+    ejecucion: EjecucionEntrada
+    pasos: list[PasoSalida]
+    fases: list[str]
+    oficios: list[OficioSalida]
+    inicio: date
+    fin: date
+    dias_calendario: int
+    entrega_deseada: date | None
+    dias_de_retraso: int | None
+    costo_mano_obra: Dinero
+    costo_materiales: Dinero
+    costo_total: Dinero
+    sugerencias: list[SugerenciaSalida]
+    actividades_actuales: int = Field(description="Actividades que ya tiene el cronograma de la obra")

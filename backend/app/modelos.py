@@ -171,7 +171,7 @@ class Fase(Base):
 class Actividad(Base):
     """Tarea del cronograma. `fecha_inicio`/`fecha_fin` se recalculan al guardar (paso adelante del CPM).
 
-    Pensado para después: fechas tardías y holgura (ruta crítica).
+    La holgura y la ruta crítica se calculan al leer (`calculos.cronograma.calcular_holguras`).
     """
 
     __tablename__ = "actividad"
@@ -197,8 +197,8 @@ class Actividad(Base):
 
 
 class Dependencia(Base):
-    """Enlace predecesora → sucesora. Por ahora solo fin-comienzo (FC) sin desfase;
-    `tipo` y `desfase_dias` quedan para CPM con otros tipos de enlace y esperas."""
+    """Enlace predecesora → sucesora, fin-comienzo (FC). `desfase_dias` es una espera entre las dos
+    (ej. fraguado de la losa); `tipo` queda para otros tipos de enlace."""
 
     __tablename__ = "dependencia"
 
@@ -238,7 +238,8 @@ class Estimacion(Base):
     """Asistente "Estimar desde plano" de una obra: lo leído del archivo y lo que confirmó el dueño.
 
     `paso` es el paso del asistente en el que quedó. CAD (dxf): capas → plantas → formulario → cantidades →
-    confirmada. BIM (ifc): plantas → cantidades → confirmada (el modelo responde el formulario).
+    confirmada → generada. BIM (ifc): plantas → cantidades → confirmada → generada (el modelo responde el
+    formulario). `ejecucion` guarda cómo se va a ejecutar (inicio, días por semana, cuadrillas) al generar.
     Las cantidades no se guardan: se calculan al leer con `medicion` y `formulario`. Solo se guardan las
     correcciones a mano (`ediciones`), así no se pierden si se vuelve a un paso anterior.
     """
@@ -260,6 +261,7 @@ class Estimacion(Base):
     formulario: Mapped[dict | None] = mapped_column(JSON)
     medicion: Mapped[dict | None] = mapped_column(JSON)
     ediciones: Mapped[dict] = mapped_column(JSON, default=dict)
+    ejecucion: Mapped[dict | None] = mapped_column(JSON)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora, onupdate=ahora)
 

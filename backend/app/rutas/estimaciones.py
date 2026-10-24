@@ -5,7 +5,7 @@ Los planos son confidenciales: se guardan con nombre aleatorio y nunca se sirven
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import config, planos
@@ -13,12 +13,15 @@ from app.db import obtener_sesion
 from app.esquemas import (
     CantidadesEntrada,
     CapasEntrada,
+    EjecucionEntrada,
     EstimacionResumen,
     EstimacionSalida,
     FormularioEntrada,
+    GenerarEntrada,
     PlantaEntrada,
+    PropuestaSalida,
 )
-from app.modelos import Estimacion, Usuario
+from app.modelos import Actividad, Estimacion, Usuario
 from app.seguridad import obra_propia, solo_dueno
 
 rutas = APIRouter(prefix="/api", tags=["estimaciones"])
@@ -129,6 +132,49 @@ def confirmar_cantidades(
 ):
     estimacion = _estimacion_propia(sesion, usuario, estimacion_id)
     planos.aplicar_cantidades(sesion, estimacion, datos.ediciones, datos.confirmar)
+    return planos.salida(estimacion)
+
+
+def _propuesta(sesion: Session, estimacion: Estimacion, ejecucion: dict) -> dict:
+    plan = planos.propuesta(estimacion, ejecucion)
+    actuales = sesion.scalar(select(func.count(Actividad.id)).where(Actividad.obra_id == estimacion.obra_id))
+    return planos.propuesta_salida(plan, ejecucion, actuales or 0)
+
+
+@rutas.get("/estimaciones/{estimacion_id}/propuesta", response_model=PropuestaSalida)
+def ver_propuesta(
+    estimacion_id: int, usuario: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)
+):
+    """Propuesta con lo último que se usó para generar, o con valores típicos."""
+    estimacion = _estimacion_propia(sesion, usuario, estimacion_id)
+    obra = obra_propia(sesion, usuario, estimacion.obra_id)
+    ejecucion = EjecucionEntrada.model_validate(planos.ejecucion_inicial(estimacion, obra))
+    return _propuesta(sesion, estimacion, ejecucion.model_dump(mode="json"))
+
+
+@rutas.post("/estimaciones/{estimacion_id}/propuesta", response_model=PropuestaSalida)
+def calcular_propuesta(
+    estimacion_id: int,
+    datos: EjecucionEntrada,
+    usuario: Usuario = Depends(solo_dueno),
+    sesion: Session = Depends(obtener_sesion),
+):
+    """Vista previa con otras cuadrillas o fechas. No guarda nada."""
+    estimacion = _estimacion_propia(sesion, usuario, estimacion_id)
+    return _propuesta(sesion, estimacion, datos.model_dump(mode="json"))
+
+
+@rutas.post("/estimaciones/{estimacion_id}/generar", response_model=EstimacionSalida)
+def generar_cronograma(
+    estimacion_id: int,
+    datos: GenerarEntrada,
+    usuario: Usuario = Depends(solo_dueno),
+    sesion: Session = Depends(obtener_sesion),
+):
+    estimacion = _estimacion_propia(sesion, usuario, estimacion_id)
+    obra = obra_propia(sesion, usuario, estimacion.obra_id)
+    ejecucion = datos.model_dump(mode="json", exclude={"modo"})
+    planos.generar(sesion, estimacion, obra, ejecucion, datos.modo)
     return planos.salida(estimacion)
 
 
