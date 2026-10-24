@@ -15,6 +15,7 @@ import type {
   RolCapa,
 } from "../tipos";
 import { Marco } from "../componentes/Marco";
+import { PasoCronograma } from "../componentes/PasoCronograma";
 import { leerCantidad, TablaCantidades, textoCantidad } from "../componentes/TablaCantidades";
 import { LeyendaPlano, VistaPlano } from "../componentes/VistaPlano";
 import { IconoAdelante, IconoAlerta, IconoBasura, IconoCheck } from "../componentes/iconos";
@@ -39,7 +40,8 @@ const TITULO_PASO: Record<PasoEstimacion, string> = {
   plantas: "Plantas",
   formulario: "Datos de la obra",
   cantidades: "Cantidades",
-  confirmada: "Listo",
+  confirmada: "Cronograma",
+  generada: "Cronograma",
 };
 
 const ROLES: { valor: RolCapa; texto: string }[] = [
@@ -161,8 +163,8 @@ function SubirPlano({ obraId, abrir }: { obraId: string; abrir: (id: number) => 
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    {e.paso === "confirmada" ? (
-                      <Pildora tono="bien">Confirmada</Pildora>
+                    {e.paso === "generada" ? (
+                      <Pildora tono="bien">Cronograma creado</Pildora>
                     ) : (
                       <Pildora tono="neutro">En {TITULO_PASO[e.paso].toLowerCase()}</Pildora>
                     )}
@@ -207,8 +209,9 @@ function Asistente({ id, obraId }: { id: string; obraId: string }) {
   if (estimacion.isLoading) return <Cargando />;
   if (!e) return <MensajeError error={estimacion.error} reintentar={() => estimacion.refetch()} />;
 
-  const pasos = e.pasos.filter((p) => p !== "confirmada");
-  const actual = e.paso === "confirmada" ? "cantidades" : e.paso;
+  // "confirmada" es el paso del cronograma; "generada" quiere decir que ya se creó.
+  const pasos = e.pasos.filter((p) => p !== "generada");
+  const actual = e.paso === "generada" ? "confirmada" : e.paso;
   const mostrado = visto ?? actual;
   const nombrePaso = (p: PasoEstimacion) => (p === "plantas" && e.tipo_archivo === "ifc" ? "Pisos" : TITULO_PASO[p]);
 
@@ -227,7 +230,7 @@ function Asistente({ id, obraId }: { id: string; obraId: string }) {
       <ol className="flex gap-1.5" aria-label="Pasos">
         {pasos.map((p, i) => {
           const alcanzado = pasos.indexOf(actual) >= i;
-          const hecho = pasos.indexOf(actual) > i || e.paso === "confirmada";
+          const hecho = pasos.indexOf(actual) > i || e.paso === "generada";
           return (
             <li key={p} className="min-w-0 flex-1">
               <button
@@ -272,7 +275,8 @@ function Asistente({ id, obraId }: { id: string; obraId: string }) {
       {mostrado === "capas" && <PasoCapas e={e} />}
       {mostrado === "plantas" && <PasoPlantas e={e} />}
       {mostrado === "formulario" && <PasoFormulario e={e} />}
-      {mostrado === "cantidades" && <PasoCantidades e={e} />}
+      {mostrado === "cantidades" && <PasoCantidades e={e} irAlCronograma={() => setVisto("confirmada")} />}
+      {mostrado === "confirmada" && <PasoCronograma e={e} obraId={obraId} />}
     </>
   );
 }
@@ -722,13 +726,13 @@ function valoresIniciales(e: Estimacion): Record<string, string> {
   );
 }
 
-function PasoCantidades({ e }: { e: Estimacion }) {
+function PasoCantidades({ e, irAlCronograma }: { e: Estimacion; irAlCronograma: () => void }) {
   const [valores, setValores] = useState<Record<string, string>>(() => valoresIniciales(e));
   const geometria = useGeometria(e);
-  const confirmada = e.paso === "confirmada";
+  const confirmada = e.paso === "confirmada" || e.paso === "generada";
   const guardar = useGuardar(String(e.id), "cantidades", (nueva) => {
     setValores(valoresIniciales(nueva));
-    avisar(nueva.paso === "confirmada" ? "Cantidades confirmadas" : "Cambios guardados");
+    avisar(nueva.paso === "cantidades" ? "Cambios guardados" : "Cantidades confirmadas");
   });
 
   const calculada = (clave: string) => {
@@ -800,15 +804,15 @@ function PasoCantidades({ e }: { e: Estimacion }) {
       <PieDePaso error={guardar.error}>
         {invalidas > 0 && <p className="text-sm text-amber-800">Hay cantidades que no son un número válido.</p>}
         {confirmada && !hayCambios ? (
-          <Tarjeta className="flex items-start gap-3">
-            <IconoCheck className="mt-0.5 shrink-0 text-emerald-700" />
-            <div>
-              <p className="font-semibold text-stone-900">Cantidades confirmadas</p>
-              <p className="text-sm text-stone-600">
-                El siguiente paso, armar el cronograma y la ruta crítica con estas cantidades, llega pronto. Puedes
-                seguir corrigiendo cantidades cuando quieras.
-              </p>
+          <Tarjeta className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 basis-60 items-start gap-3">
+              <IconoCheck className="mt-0.5 shrink-0 text-emerald-700" />
+              <div>
+                <p className="font-semibold text-stone-900">Cantidades confirmadas</p>
+                <p className="text-sm text-stone-600">Puedes seguir corrigiéndolas cuando quieras.</p>
+              </div>
             </div>
+            <Boton onClick={irAlCronograma}>Armar el cronograma</Boton>
           </Tarjeta>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">

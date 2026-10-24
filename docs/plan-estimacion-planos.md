@@ -1,7 +1,8 @@
 # Plan de implementación — Estimación desde plano CAD/BIM + formulario
 
-Fecha: 23/10/2026 · Estado: **pasos 1 a 5 implementados** (subir DXF o IFC → cantidades confirmadas). Falta el
-paso 6, generar el cronograma y la ruta crítica (C0/E0). Ver §3.1 con lo que cambió al construirlo.
+Fecha: 23/10/2026 · Estado: **los 6 pasos implementados**, del plano DXF o IFC al cronograma con ruta crítica.
+El catálogo de rendimientos es ilustrativo y vive en código (falta calibrarlo y hacerlo editable por dueño).
+Ver §3.1 y §8.4 con lo que cambió al construirlo.
 
 ## 1. Objetivo
 
@@ -78,7 +79,9 @@ retomar.
 - **Planos confidenciales:** se guardan con nombre aleatorio en `backend/planos/` (fuera de git), nunca se
   sirven de vuelta y se borran al borrar la estimación.
 - API en `rutas/estimaciones.py`; pantalla `paginas/EstimarObra.tsx` con `VistaPlano` y `TablaCantidades`.
-  Las cuadrillas y la fecha de inicio se preguntarán en el paso 6 (generar), igual para CAD y BIM.
+- **Paso 6, Cronograma** (`componentes/PasoCronograma.tsx`), igual para CAD y BIM: fecha de inicio, entrega
+  deseada, días de trabajo por semana y cuadrillas por oficio (con "subcontrato"). Cada cambio recalcula la
+  vista previa sin guardar; "Crear cronograma" agrega o reemplaza (con confirmación si borra actividades).
 
 ## 4. Formulario complementario
 
@@ -275,6 +278,33 @@ En el paso 6 el constructor ve:
   jornales)". Es un cálculo puro, sin guardar, que se repite por oficio.
 
 Después de generar, la ruta crítica se recalcula sola en cada cambio del cronograma, como hoy las fechas.
+
+### 8.4 Cómo quedó implementado (23/10/2026)
+
+- **C0 ruta crítica:** `calculos/cronograma.calcular_holguras` (paso hacia atrás). El cronograma devuelve
+  `holgura_dias` y `critica` por actividad; se calculan al leer, no se guardan. El Gantt pinta la ruta
+  crítica en rojo, la holgura como tramo punteado y tiene "Solo ruta crítica". Editar una actividad
+  conserva la espera (fraguado) de sus predecesoras. Pendiente: enlaces CC.
+- **Catálogo** en `calculos/catalogo.py` (código, no tablas todavía): rubro → actividad, fase, oficio,
+  cuadrilla, rendimiento y consumos; jornales y precios de referencia. **Valores ilustrativos.**
+- **Generador** `calculos/estimacion.py`:
+  - Secuencia por piso: columnas → muros y vigas/losa → eléctrica → revoques → cielo raso → contrapiso y
+    piso → carpintería → pintura; el piso de arriba espera 7 días de fraguado; sanitaria después de los
+    muros; cubierta después de la última losa; entrega al final. Un paso sin cantidad no se crea y sus
+    sucesoras heredan sus predecesoras.
+  - El hormigón de cada piso se parte en columnas (25 %) y vigas y losa (75 %). El fierro va como material.
+  - Duración en días de trabajo según rendimiento × cuadrillas del oficio, pasada a días calendario con los
+    días de trabajo por semana. Todas las cuadrillas de un oficio trabajan juntas en un paso, así que un
+    oficio no hace dos pasos a la vez: si se cruzan, va primero el que puede empezar antes (si empatan, el
+    de menor holgura) y se agrega una predecesora "por cuadrilla". Lo subcontratado no compite.
+  - Se quitan predecesoras implícitas (las técnicas solo entre técnicas, para no perder la secuencia si
+    después se borra un enlace por cuadrilla).
+  - Sugerencia: se recalcula con una cuadrilla más de cada oficio de la ruta crítica y se muestran los días
+    que se ganan y la diferencia en jornales.
+  - La mano de obra se guarda como jornal por día de la actividad (días calendario), así que con 5 o 6 días
+    de trabajo por semana el costo incluye los días sin trabajo de la duración.
+- **Guardado:** `estimacion.ejecucion` (JSON) y paso `generada`. Las actividades se crean con las tablas del
+  cronograma de siempre; el origen técnica/cuadrilla de cada enlace solo se muestra en la vista previa.
 
 ## 9. Modelo de datos (nuevo, propio)
 

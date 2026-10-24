@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { fecha, fechaCorta } from "../formato";
 import type { Actividad, Cronograma } from "../tipos";
 
@@ -23,6 +23,12 @@ const COLOR_ESTADO: Record<EstadoActividad, string> = {
   en_curso: "bg-stone-800",
   pendiente: "bg-stone-200 ring-1 ring-inset ring-stone-300",
 };
+// La ruta crítica va en rojo: si una de esas actividades se atrasa, se atrasa la entrega.
+const COLOR_CRITICA: Record<EstadoActividad, string> = {
+  terminada: "bg-red-300",
+  en_curso: "bg-red-700",
+  pendiente: "bg-red-50 ring-1 ring-inset ring-red-400",
+};
 const TEXTO_ESTADO: Record<EstadoActividad, string> = {
   terminada: "Ya debió terminar",
   en_curso: "En curso",
@@ -43,19 +49,40 @@ function anchoDia(totalDias: number): number {
   return 6;
 }
 
-/** Línea de tiempo: una barra por actividad, agrupadas por fase, con la marca de hoy. */
-export function Gantt({ cronograma }: { cronograma: Cronograma }) {
-  const actividades = cronograma.fases.flatMap((f) => f.actividades);
-  if (actividades.length === 0) {
+function textoHolgura(dias: number): string {
+  if (dias === 0) return "Ruta crítica: si se atrasa, se atrasa la entrega";
+  return `Puede atrasarse ${dias} ${dias === 1 ? "día" : "días"} sin mover la entrega`;
+}
+
+/**
+ * Línea de tiempo: una barra por actividad, agrupadas por fase, con la marca de hoy, la ruta crítica en
+ * rojo y la holgura como un tramo punteado después de cada barra. `vistaPrevia` es para un cronograma que
+ * todavía no existe (sin marca de hoy ni estados).
+ */
+export function Gantt({
+  cronograma,
+  vistaPrevia = false,
+}: {
+  cronograma: Pick<Cronograma, "fases" | "hoy" | "fecha_inicio" | "fecha_fin">;
+  vistaPrevia?: boolean;
+}) {
+  const [soloCriticas, setSoloCriticas] = useState(false);
+  const todas = cronograma.fases.flatMap((f) => f.actividades);
+  if (todas.length === 0) {
     return <p className="text-sm text-stone-500">Agrega actividades para ver la línea de tiempo.</p>;
   }
+  const fases = cronograma.fases
+    .map((f) => ({ ...f, actividades: soloCriticas ? f.actividades.filter((a) => a.critica) : f.actividades }))
+    .filter((f) => !soloCriticas || f.actividades.length > 0);
+  const actividades = todas;
+  const criticas = todas.filter((a) => a.critica).length;
 
-  const hoy = dia(cronograma.hoy);
+  const hoy = vistaPrevia ? Number.NEGATIVE_INFINITY : dia(cronograma.hoy);
   let inicio = dia(cronograma.fecha_inicio);
   let fin = Math.max(dia(cronograma.fecha_fin), inicio);
   // Si hoy cae cerca del cronograma, se estira el eje para mostrarlo.
-  if (hoy < inicio && inicio - hoy <= 14) inicio = hoy;
-  if (hoy > fin && hoy - fin <= 14) fin = hoy;
+  if (!vistaPrevia && hoy < inicio && inicio - hoy <= 14) inicio = hoy;
+  if (!vistaPrevia && hoy > fin && hoy - fin <= 14) fin = hoy;
   fin += 1; // un día de aire al final
 
   const total = fin - inicio + 1;
@@ -76,6 +103,24 @@ export function Gantt({ cronograma }: { cronograma: Cronograma }) {
 
   return (
     <div>
+      {criticas > 0 && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-stone-600">
+            <span className="font-semibold tabular-nums text-red-700">{criticas}</span> de{" "}
+            <span className="tabular-nums">{todas.length}</span> actividades están en la ruta crítica.
+          </p>
+          <button
+            type="button"
+            aria-pressed={soloCriticas}
+            onClick={() => setSoloCriticas(!soloCriticas)}
+            className={`min-h-10 rounded-lg border px-3 text-sm font-medium transition active:scale-[0.98] ${
+              soloCriticas ? "border-red-300 bg-red-50 text-red-800" : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+            }`}
+          >
+            {soloCriticas ? "Ver todas" : "Solo ruta crítica"}
+          </button>
+        </div>
+      )}
       <div
         className="overflow-x-auto rounded-xl ring-1 ring-stone-200"
         ref={(el) => {
@@ -103,7 +148,7 @@ export function Gantt({ cronograma }: { cronograma: Cronograma }) {
             </div>
           </div>
 
-          {cronograma.fases.map((fase) => {
+          {fases.map((fase) => {
             const desde = fase.actividades.length ? Math.min(...fase.actividades.map((a) => dia(a.fecha_inicio))) : null;
             const hasta = fase.actividades.length ? Math.max(...fase.actividades.map((a) => dia(a.fecha_fin))) : null;
             return (
@@ -121,7 +166,10 @@ export function Gantt({ cronograma }: { cronograma: Cronograma }) {
                   <Fila
                     key={a.id}
                     etiqueta={
-                      <span className="block truncate pl-3 text-stone-700" title={a.nombre}>
+                      <span
+                        className={`block truncate pl-3 ${a.critica ? "font-medium text-red-800" : "text-stone-700"}`}
+                        title={a.nombre}
+                      >
                         {a.nombre}
                       </span>
                     }
@@ -133,6 +181,7 @@ export function Gantt({ cronograma }: { cronograma: Cronograma }) {
                       ancho={a.duracion_dias * w}
                       nombres={nombres}
                       hoy={hoy}
+                      anchoDia={w}
                     />
                   </Fila>
                 ))}
@@ -155,14 +204,25 @@ export function Gantt({ cronograma }: { cronograma: Cronograma }) {
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-600">
         <span className="tabular-nums">
           {fecha(cronograma.fecha_inicio)} – {fecha(cronograma.fecha_fin)}
-          {!hoyVisible && ` · Hoy (${fecha(cronograma.hoy)}) está fuera de las fechas de la obra`}
+          {!vistaPrevia && !hoyVisible && ` · Hoy (${fecha(cronograma.hoy)}) está fuera de las fechas de la obra`}
         </span>
-        {(["terminada", "en_curso", "pendiente"] as const).map((e) => (
-          <span key={e} className="inline-flex items-center gap-1.5">
-            <span className={`h-2.5 w-4 rounded-sm ${COLOR_ESTADO[e]}`} />
-            {TEXTO_ESTADO[e]}
+        {!vistaPrevia &&
+          (["terminada", "en_curso", "pendiente"] as const).map((e) => (
+            <span key={e} className="inline-flex items-center gap-1.5">
+              <span className={`h-2.5 w-4 rounded-sm ${COLOR_ESTADO[e]}`} />
+              {TEXTO_ESTADO[e]}
+            </span>
+          ))}
+        {criticas > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-2.5 w-4 rounded-sm ${vistaPrevia ? COLOR_CRITICA.pendiente : COLOR_CRITICA.en_curso}`} />
+            Ruta crítica
           </span>
-        ))}
+        )}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-4 border-y border-r border-dashed border-stone-400" />
+          Holgura
+        </span>
       </div>
     </div>
   );
@@ -200,25 +260,40 @@ function Barra({
   ancho,
   nombres,
   hoy,
+  anchoDia,
 }: {
   actividad: Actividad;
   izquierda: number;
   ancho: number;
   nombres: Map<number, string>;
   hoy: number;
+  anchoDia: number;
 }) {
   const despues = a.predecesoras.map((p) => nombres.get(p)).filter(Boolean);
   const estado = estadoPorFecha(a, hoy);
+  const colores = a.critica ? COLOR_CRITICA : COLOR_ESTADO;
+  const textoPendiente = a.critica ? "text-red-800" : "text-stone-700";
   const detalle =
-    `${a.nombre}: ${fecha(a.fecha_inicio)} – ${fecha(a.fecha_fin)} (${a.duracion_dias} d) · ${TEXTO_ESTADO[estado]}` +
+    `${a.nombre}: ${fecha(a.fecha_inicio)} – ${fecha(a.fecha_fin)} (${a.duracion_dias} d)` +
+    (hoy === Number.NEGATIVE_INFINITY ? "" : ` · ${TEXTO_ESTADO[estado]}`) +
+    `\n${textoHolgura(a.holgura_dias)}` +
     (despues.length ? `\nDespués de: ${despues.join(", ")}` : "");
   return (
-    <div
-      className={`absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden rounded px-1 text-[11px] font-medium ${COLOR_ESTADO[estado]} ${estado === "pendiente" ? "text-stone-700" : "text-white"}`}
-      style={{ left: izquierda, width: Math.max(ancho, 4) }}
-      title={detalle}
-    >
-      {ancho >= 32 && `${a.duracion_dias} d`}
-    </div>
+    <>
+      <div
+        className={`absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden rounded px-1 text-[11px] font-medium ${colores[estado]} ${estado === "pendiente" ? textoPendiente : "text-white"}`}
+        style={{ left: izquierda, width: Math.max(ancho, 4) }}
+        title={detalle}
+      >
+        {ancho >= 32 && `${a.duracion_dias} d`}
+      </div>
+      {a.holgura_dias > 0 && (
+        <div
+          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-r-sm border-y border-r border-dashed border-stone-400"
+          style={{ left: izquierda + Math.max(ancho, 4), width: a.holgura_dias * anchoDia }}
+          title={textoHolgura(a.holgura_dias)}
+        />
+      )}
+    </>
   );
 }

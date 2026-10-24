@@ -497,9 +497,13 @@ function FilaActividad({
   return (
     <li className="flex items-center gap-2 py-2">
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-stone-900">{a.nombre}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium text-stone-900">{a.nombre}</span>
+          {a.critica && <Pildora tono="problema">Ruta crítica</Pildora>}
+        </div>
         <div className="text-sm tabular-nums text-stone-600">
           {a.duracion_dias} día(s) · {fecha(a.fecha_inicio)} – {fecha(a.fecha_fin)}
+          {!a.critica && a.holgura_dias > 0 && ` · puede atrasarse ${a.holgura_dias} día(s)`}
         </div>
         {a.predecesoras.length > 0 && (
           <div className="truncate text-sm text-stone-600">

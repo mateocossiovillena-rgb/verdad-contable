@@ -178,6 +178,8 @@ export interface Actividad {
   fecha_fin: string;
   orden: number;
   predecesoras: number[];
+  holgura_dias: number;
+  critica: boolean;
   recursos: Recurso[];
   costo_mano_obra: number;
   costo_materiales: number;
@@ -206,7 +208,7 @@ export interface Cronograma {
 // --- Estimación desde plano ---
 
 export type RolCapa = "muros" | "puertas" | "ventanas" | "ambientes" | "columnas" | "ignorar";
-export type PasoEstimacion = "capas" | "plantas" | "formulario" | "cantidades" | "confirmada";
+export type PasoEstimacion = "capas" | "plantas" | "formulario" | "cantidades" | "confirmada" | "generada";
 export type OrigenCantidad = "plano" | "formulario" | "proporcion" | "editada";
 
 export interface CapaPlano {
@@ -287,6 +289,7 @@ export interface Estimacion {
   pisos_medidos: PisoMedido[];
   cantidades: CantidadObra[];
   avisos: string[];
+  ejecucion: Ejecucion | null;
   creado_en: string;
 }
 
@@ -313,4 +316,73 @@ export interface PlantaDibujada {
 export interface GeometriaPlano {
   zonas: { indice: number; ancho: number; alto: number; muros: Segmento[] }[];
   plantas: PlantaDibujada[];
+}
+
+// --- Cronograma desde la estimación ---
+
+export type Oficio =
+  | "tierras"
+  | "estructura"
+  | "albanileria"
+  | "pisos"
+  | "electricidad"
+  | "plomeria"
+  | "carpinteria"
+  | "techo"
+  | "pintura"
+  | "limpieza";
+
+export interface Ejecucion {
+  fecha_inicio: string;
+  dias_semana: 5 | 6 | 7;
+  entrega_deseada: string | null;
+  cuadrillas: Partial<Record<Oficio, number>>;
+  subcontratos: Oficio[];
+}
+
+export interface PasoPropuesto {
+  clave: string;
+  nombre: string;
+  fase: string;
+  oficio: Oficio;
+  cantidad: number | null;
+  unidad: string;
+  dias_trabajo: number;
+  duracion_dias: number;
+  personas: number;
+  inicio: string;
+  fin: string;
+  holgura_dias: number;
+  critica: boolean;
+  predecesoras: { clave: string; desfase_dias: number; origen: "tecnica" | "cuadrilla" }[];
+  costo_mano_obra: number;
+  costo_materiales: number;
+}
+
+export interface OficioPropuesto {
+  clave: Oficio;
+  nombre: string;
+  cuadrillas: number;
+  subcontrato: boolean;
+  personas_por_cuadrilla: number;
+  pasos: number;
+  dias_trabajo: number;
+  en_ruta_critica: boolean;
+}
+
+export interface Propuesta {
+  ejecucion: Ejecucion;
+  pasos: PasoPropuesto[];
+  fases: string[];
+  oficios: OficioPropuesto[];
+  inicio: string;
+  fin: string;
+  dias_calendario: number;
+  entrega_deseada: string | null;
+  dias_de_retraso: number | null;
+  costo_mano_obra: number;
+  costo_materiales: number;
+  costo_total: number;
+  sugerencias: { oficio: Oficio; nombre: string; dias_menos: number; costo_extra: number }[];
+  actividades_actuales: number;
 }

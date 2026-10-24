@@ -67,15 +67,18 @@ Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mis
         DetalleObra con pestañas Resumen (frase, métricas, curva S, índices) y Cronograma
   - [ ] Revisar el rediseño en celular real (al sol, con señal débil)
   - [x] Mano de obra (por día o por la actividad) y materiales por actividad, con costos por fase y obra
-  - [ ] Próximos: ruta crítica (CPM), equipo, comparar con presupuesto → docs/plan-mvp.md §7
+  - [ ] Próximos: equipo, comparar con presupuesto → docs/plan-mvp.md §7 (ruta crítica ya está)
   - [ ] Estimación desde plano CAD/BIM + formulario → pasos del proyecto y ruta crítica (propuesta)
         → docs/plan-estimacion-planos.md (orden: C0 ruta crítica → E0 → E1…)
     - [x] Subir plano DXF (CAD) o IFC (BIM) y confirmar capas/unidades, plantas, formulario (solo CAD) y
           cantidades editables. Lectores propios sin librerías externas (licencias): `calculos/plano_dxf.py`,
           `medicion_plano.py`, `plano_ifc.py`, `computos.py`; servicio `app/planos.py`; API
           `rutas/estimaciones.py`; pantalla `EstimarObra` (botón en Cronograma); 84 tests.
-    - [ ] Siguiente: generar cronograma y ruta crítica desde las cantidades (C0/E0); revisar con un plano
-          real de un constructor (calibrar valores típicos de `computos.py`).
+    - [x] Ruta crítica (holguras, Gantt en rojo) y paso "Cronograma": catálogo base ilustrativo
+          (`calculos/catalogo.py`), generador `calculos/estimacion.py` (secuencia por piso, cuadrillas
+          compartidas, sugerencia de cuadrilla), vista previa y "Crear cronograma" (agregar o reemplazar).
+    - [ ] Siguiente: calibrar el catálogo con constructores y hacerlo editable por dueño; probar con un plano
+          real; enlaces CC; feriados de Bolivia.
   - [ ] Íconos PNG, prueba en celular real
   - [ ] Dockerfile, CI (GitHub Actions), README con instrucciones
 - [ ] Fase 3: piloto con 2 constructores
