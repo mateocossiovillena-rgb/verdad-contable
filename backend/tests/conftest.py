@@ -10,6 +10,7 @@ from app.main import app
 @pytest.fixture
 def cliente(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CARPETA_FOTOS", tmp_path / "fotos")
+    monkeypatch.setattr(config, "CARPETA_PLANOS", tmp_path / "planos")
     motor = crear_motor(f"sqlite:///{tmp_path / 'prueba.db'}")
     Base.metadata.create_all(motor)
     fabrica = sessionmaker(bind=motor, expire_on_commit=False)

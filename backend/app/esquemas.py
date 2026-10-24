@@ -388,3 +388,114 @@ class Cronograma(BaseModel):
     costo_mano_obra: Dinero = Decimal("0")
     costo_materiales: Dinero = Decimal("0")
     costo_total: Dinero = Decimal("0")
+
+
+# --- Estimación desde plano ---
+
+RolCapa = Literal["muros", "puertas", "ventanas", "ambientes", "columnas", "ignorar"]
+PasoEstimacion = Literal["capas", "plantas", "formulario", "cantidades", "confirmada"]
+
+
+class CapasEntrada(BaseModel):
+    capas: dict[str, RolCapa]
+    unidades: Literal[1, 2, 4, 5, 6] = Field(description="1 pulgadas, 2 pies, 4 mm, 5 cm, 6 m")
+
+
+class PlantaEntrada(BaseModel):
+    indice: int = Field(ge=0)
+    nombre: str = Field(max_length=60)
+    incluir: bool
+    repeticiones: int = Field(default=1, ge=1, le=60)
+
+
+class FormularioEntrada(BaseModel):
+    tipo_obra: Literal["vivienda", "departamentos", "comercial"] = "vivienda"
+    altura_piso: float = Field(default=2.60, ge=2.0, le=6.0)
+    tipo_muro: Literal["ladrillo_6h", "bloque_cemento", "adobe"] = "ladrillo_6h"
+    espesor_exterior: float = Field(default=0.18, ge=0.08, le=0.6)
+    espesor_interior: float = Field(default=0.12, ge=0.05, le=0.4)
+    losa: Literal["alivianada", "maciza", "viguetas"] = "alivianada"
+    cubierta: Literal["losa", "calamina", "teja"] = "losa"
+    fundacion: Literal["zapatas", "cimiento_corrido"] = "zapatas"
+    acabado: Literal["economico", "medio", "alto"] = "medio"
+    piso: Literal["ceramica", "porcelanato", "cemento"] = "ceramica"
+    banos: int | None = Field(default=None, ge=0, le=50)
+    cocinas: int | None = Field(default=None, ge=0, le=50)
+
+
+class CantidadesEntrada(BaseModel):
+    ediciones: dict[str, Annotated[float, Field(ge=0, le=1_000_000)]] = Field(default_factory=dict)
+    confirmar: bool = False
+
+
+class CapaSalida(BaseModel):
+    nombre: str
+    lineas: int
+    bloques: int
+    arcos: int
+    textos: int
+    rol: RolCapa
+    rol_sugerido: RolCapa
+    recordada: bool
+
+
+class PlantaSalida(BaseModel):
+    indice: int
+    nombre: str
+    incluir: bool
+    repeticiones: int
+    ancho: float | None
+    alto: float | None
+    detalle: str
+
+
+class PisoMedidoSalida(BaseModel):
+    nombre: str
+    repeticiones: int
+    area_planta: float
+    largo_muros: float
+    perimetro_exterior: float
+    ambientes: int
+    banos: int
+    cocinas: int
+    puertas: int
+    ventanas: int
+
+
+class CantidadSalida(BaseModel):
+    clave: str
+    rubro: str
+    nombre: str
+    piso: str | None
+    unidad: str
+    cantidad: float
+    cantidad_original: float | None
+    origen: Literal["plano", "formulario", "proporcion", "editada"]
+    detalle: str
+
+
+class EstimacionSalida(BaseModel):
+    id: int
+    obra_id: int
+    tipo_archivo: Literal["dxf", "ifc"]
+    nombre_archivo: str
+    paso: PasoEstimacion
+    pasos: list[PasoEstimacion]
+    unidades: int | None
+    unidades_deducidas: bool
+    capas: list[CapaSalida]
+    plantas: list[PlantaSalida]
+    formulario: dict | None
+    datos_del_modelo: list[str]
+    pisos_medidos: list[PisoMedidoSalida]
+    cantidades: list[CantidadSalida]
+    avisos: list[str]
+    creado_en: datetime
+
+
+class EstimacionResumen(Modelo):
+    id: int
+    tipo_archivo: str
+    nombre_archivo: str
+    paso: str
+    creado_en: datetime

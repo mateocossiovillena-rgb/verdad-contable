@@ -64,9 +64,9 @@ def planta(dx: float, nombres: tuple[str, str]) -> list[str]:
     """Una planta de 10 × 8 m (en cm) desplazada `dx` en x."""
     e = []
     # Muros exteriores: cara exterior (rectángulo de 1000 × 800) y cara interior a 18 cm.
-    for (x1, y1, x2, y2) in ((0, 0, 1000, 0), (1000, 0, 1000, 800), (1000, 800, 0, 800), (0, 800, 0, 0)):
+    for x1, y1, x2, y2 in ((0, 0, 1000, 0), (1000, 0, 1000, 800), (1000, 800, 0, 800), (0, 800, 0, 0)):
         e.append(linea("A-MURO", x1 + dx, y1, x2 + dx, y2))
-    for (x1, y1, x2, y2) in ((18, 18, 982, 18), (982, 18, 982, 782), (982, 782, 18, 782), (18, 782, 18, 18)):
+    for x1, y1, x2, y2 in ((18, 18, 982, 18), (982, 18, 982, 782), (982, 782, 18, 782), (18, 782, 18, 18)):
         e.append(linea("A-MURO", x1 + dx, y1, x2 + dx, y2))
     # Muro interior de 12 cm en x = 500.
     e.append(linea("A-MURO", 494 + dx, 18, 494 + dx, 782))
@@ -89,7 +89,7 @@ def casa_dxf(unidades: int | None = 5) -> bytes:
 
 def casa_ifc() -> bytes:
     """Dos pisos en milímetros. Planta baja con cantidades (Qto) y un muro que solo trae geometría."""
-    return """ISO-10303-21;
+    return b"""ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
 FILE_NAME('casa.ifc','2026-10-23T00:00:00',(''),(''),'','','');
@@ -151,4 +151,4 @@ DATA;
 #82=IFCRELAGGREGATES('a0',$,$,$,#10,(#25,#26));
 ENDSEC;
 END-ISO-10303-21;
-""".encode("utf-8")
+"""
