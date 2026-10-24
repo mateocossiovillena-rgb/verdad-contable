@@ -79,6 +79,12 @@ Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mis
           compartidas, sugerencia de cuadrilla), vista previa y "Crear cronograma" (agregar o reemplazar).
     - [ ] Siguiente: calibrar el catálogo con constructores y hacerlo editable por dueño; probar con un plano
           real; enlaces CC; feriados de Bolivia.
+  - [x] Preparación de la demo: pantalla Equipo (Cuenta → Equipo: crear encargado, PIN, obras, quitar acceso),
+        límite de intentos de ingreso (5 por cuenta / 20 por IP en 15 min, en memoria), `CLAVE_SECRETA`
+        obligatoria con `ENTORNO=produccion`, datos demo con cronograma y ruta crítica, guion en
+        `docs/guion-demo.md`; 111 tests. Entorno local: `backend/.venv` (`pip install -r requirements-dev.txt`).
+  - [ ] Pendiente detectado: si "Gastos generales" tiene presupuesto se evalúa como partida normal y da alertas
+        falsas ("sin fechas", "0 % de avance"); excluirla de esas reglas.
   - [ ] Íconos PNG, prueba en celular real
   - [ ] Dockerfile, CI (GitHub Actions), README con instrucciones
 - [ ] Fase 3: piloto con 2 constructores

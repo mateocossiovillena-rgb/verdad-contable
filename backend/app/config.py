@@ -13,10 +13,24 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len("postgresql://") :]
 
+# "produccion" en el servidor publicado: ahí la app no arranca sin una CLAVE_SECRETA propia.
+ENTORNO = os.environ.get("ENTORNO", "desarrollo")
+
 CLAVE_SECRETA = os.environ.get("CLAVE_SECRETA", "")
+if ENTORNO == "produccion" and len(CLAVE_SECRETA) < 32:
+    # Con la clave de desarrollo (visible en este archivo) cualquiera podría fabricar sesiones válidas.
+    raise RuntimeError(
+        "En producción CLAVE_SECRETA es obligatoria y debe tener al menos 32 caracteres. "
+        'Genera una con: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+    )
 if not CLAVE_SECRETA:
     CLAVE_SECRETA = "solo-para-desarrollo-cambiar-en-produccion"
     warnings.warn("CLAVE_SECRETA no está definida: usando una clave de desarrollo.", stacklevel=1)
+
+# Intentos fallidos de ingreso antes de bloquear por un rato (frena a quien prueba PINs al azar).
+INTENTOS_POR_USUARIO = int(os.environ.get("INTENTOS_POR_USUARIO", "5"))
+INTENTOS_POR_IP = int(os.environ.get("INTENTOS_POR_IP", "20"))
+MINUTOS_BLOQUEO = int(os.environ.get("MINUTOS_BLOQUEO", "15"))
 
 # Bolivia no tiene horario de verano: UTC-4 todo el año.
 HORAS_ZONA_HORARIA = int(os.environ.get("HORAS_ZONA_HORARIA", "-4"))

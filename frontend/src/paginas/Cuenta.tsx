@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { useSesion } from "../sesion";
 import { Marco } from "../componentes/Marco";
-import { IconoSalir } from "../componentes/iconos";
-import { Boton, Tarjeta } from "../componentes/ui";
+import { IconoAdelante, IconoCuenta, IconoSalir } from "../componentes/iconos";
+import { Boton, BotonEnlace, Tarjeta } from "../componentes/ui";
 
 const ROLES = { dueno: "Dueño / constructor", encargado: "Encargado de obra" };
 
@@ -34,6 +34,15 @@ export function Cuenta() {
           )}
         </dl>
       </Tarjeta>
+      {usuario.rol === "dueno" && (
+        <BotonEnlace a="/equipo" variante="secundario" className="w-full justify-between">
+          <span className="flex items-center gap-2">
+            <IconoCuenta />
+            Equipo: encargados de obra
+          </span>
+          <IconoAdelante />
+        </BotonEnlace>
+      )}
       <Boton
         variante="secundario"
         className="w-full"

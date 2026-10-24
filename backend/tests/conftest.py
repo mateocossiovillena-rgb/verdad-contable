@@ -5,10 +5,12 @@ from sqlalchemy.orm import sessionmaker
 from app import config
 from app.db import Base, crear_motor, obtener_sesion
 from app.main import app
+from app.seguridad import intentos_ingreso
 
 
 @pytest.fixture
 def cliente(tmp_path, monkeypatch):
+    intentos_ingreso.limpiar()
     monkeypatch.setattr(config, "CARPETA_FOTOS", tmp_path / "fotos")
     monkeypatch.setattr(config, "CARPETA_PLANOS", tmp_path / "planos")
     motor = crear_motor(f"sqlite:///{tmp_path / 'prueba.db'}")

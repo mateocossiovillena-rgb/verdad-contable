@@ -3,6 +3,8 @@
 import hashlib
 import hmac
 import secrets
+import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -32,6 +34,45 @@ def verificar_clave(clave: str, guardada: str) -> bool:
         return False
     calculado = hashlib.pbkdf2_hmac("sha256", clave.encode(), bytes.fromhex(sal), int(iteraciones)).hex()
     return hmac.compare_digest(calculado, resumen)
+
+
+class ControlIntentos:
+    """Cuenta ingresos fallidos por clave (usuario o IP) dentro de una ventana de tiempo.
+
+    En memoria: alcanza para un solo proceso del servidor, que es como se despliega el MVP.
+    """
+
+    def __init__(self, reloj: Callable[[], float] = time.monotonic):
+        self._reloj = reloj
+        self._fallos: dict[str, list[float]] = {}
+
+    def _recientes(self, clave: str, ventana: float) -> list[float]:
+        limite = self._reloj() - ventana
+        fallos = [t for t in self._fallos.get(clave, []) if t > limite]
+        if fallos:
+            self._fallos[clave] = fallos
+        else:
+            self._fallos.pop(clave, None)
+        return fallos
+
+    def segundos_bloqueado(self, clave: str, maximo: int, ventana: float) -> float:
+        """0 si puede intentar; si no, cuánto falta para que caduque el fallo más antiguo."""
+        fallos = self._recientes(clave, ventana)
+        if len(fallos) < maximo:
+            return 0.0
+        return max(0.0, fallos[-maximo] + ventana - self._reloj())
+
+    def registrar_fallo(self, clave: str) -> None:
+        self._fallos.setdefault(clave, []).append(self._reloj())
+
+    def limpiar(self, clave: str | None = None) -> None:
+        if clave is None:
+            self._fallos.clear()
+        else:
+            self._fallos.pop(clave, None)
+
+
+intentos_ingreso = ControlIntentos()
 
 
 def crear_token(usuario: Usuario) -> str:

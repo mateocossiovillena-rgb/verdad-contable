@@ -1,9 +1,12 @@
 """Registro de dueños, inicio de sesión y equipo (encargados)."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import math
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
+from app import config
 from app.db import obtener_sesion
 from app.esquemas import (
     EncargadoCambios,
@@ -15,7 +18,15 @@ from app.esquemas import (
     UsuarioSalida,
 )
 from app.modelos import ROL_DUENO, ROL_ENCARGADO, Asignacion, Usuario
-from app.seguridad import cifrar_clave, crear_token, obra_propia, solo_dueno, usuario_actual, verificar_clave
+from app.seguridad import (
+    cifrar_clave,
+    crear_token,
+    intentos_ingreso,
+    obra_propia,
+    solo_dueno,
+    usuario_actual,
+    verificar_clave,
+)
 
 rutas = APIRouter(prefix="/api", tags=["sesión"])
 
@@ -36,15 +47,33 @@ def registrar_dueno(datos: RegistroDueno, sesion: Session = Depends(obtener_sesi
 
 
 @rutas.post("/sesion/ingreso", response_model=Sesion)
-def ingresar(datos: Ingreso, sesion: Session = Depends(obtener_sesion)):
+def ingresar(datos: Ingreso, peticion: Request, sesion: Session = Depends(obtener_sesion)):
     identificador = datos.usuario.strip()
+    # Se bloquea por cuenta (alguien probando PINs de un celular) y por IP (probando muchas cuentas).
+    clave_usuario = "usuario:" + _normalizar_telefono(identificador.lower())
+    clave_ip = "ip:" + (peticion.client.host if peticion.client else "desconocida")
+    ventana = config.MINUTOS_BLOQUEO * 60
+    espera = max(
+        intentos_ingreso.segundos_bloqueado(clave_usuario, config.INTENTOS_POR_USUARIO, ventana),
+        intentos_ingreso.segundos_bloqueado(clave_ip, config.INTENTOS_POR_IP, ventana),
+    )
+    if espera > 0:
+        minutos = max(1, math.ceil(espera / 60))
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Demasiados intentos fallidos. Espera {minutos} min y vuelve a intentar.",
+            headers={"Retry-After": str(math.ceil(espera))},
+        )
     usuario = sesion.scalar(
         select(Usuario).where(
             or_(Usuario.correo == identificador.lower(), Usuario.telefono == _normalizar_telefono(identificador))
         )
     )
     if usuario is None or not usuario.activo or not verificar_clave(datos.clave, usuario.clave_hash):
+        intentos_ingreso.registrar_fallo(clave_usuario)
+        intentos_ingreso.registrar_fallo(clave_ip)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario o clave incorrectos")
+    intentos_ingreso.limpiar(clave_usuario)
     return Sesion(token=crear_token(usuario), usuario=UsuarioSalida.model_validate(usuario))
 
 
