@@ -84,6 +84,10 @@ class Partida(Base):
     orden: Mapped[int] = mapped_column(Integer, default=0)
     # Partida automática donde caen los gastos que no se asignan a otra.
     es_generales: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Partida de una actividad del cronograma: nombre, fase, fechas y presupuesto (su costo) vienen de la
+    # actividad y se actualizan en cada recálculo (`servicios.sincronizar_partidas`).
+    desde_cronograma: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    actividad_id: Mapped[int | None] = mapped_column(ForeignKey("actividad.id", ondelete="SET NULL"), unique=True)
 
     obra: Mapped[Obra] = relationship(back_populates="partidas")
 

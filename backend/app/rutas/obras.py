@@ -206,6 +206,9 @@ def crear_partida(
     return partida
 
 
+MENSAJE_DESDE_CRONOGRAMA = "Esta partida sale de una actividad del cronograma: cámbiala o bórrala desde el cronograma"
+
+
 def _partida_propia(sesion: Session, dueno: Usuario, partida_id: int) -> Partida:
     partida = sesion.get(Partida, partida_id)
     if partida is None:
@@ -222,6 +225,8 @@ def editar_partida(
     sesion: Session = Depends(obtener_sesion),
 ):
     partida = _partida_propia(sesion, dueno, partida_id)
+    if partida.desde_cronograma:
+        raise HTTPException(status.HTTP_409_CONFLICT, MENSAJE_DESDE_CRONOGRAMA)
     for campo, valor in datos.model_dump(exclude_none=True).items():
         setattr(partida, campo, valor)
     if datos.fecha_inicio is None:
@@ -237,6 +242,8 @@ def borrar_partida(partida_id: int, dueno: Usuario = Depends(solo_dueno), sesion
     partida = _partida_propia(sesion, dueno, partida_id)
     if partida.es_generales:
         raise HTTPException(status.HTTP_409_CONFLICT, "La partida de gastos generales no se puede borrar")
+    if partida.desde_cronograma:
+        raise HTTPException(status.HTTP_409_CONFLICT, MENSAJE_DESDE_CRONOGRAMA)
     tiene_registros = sesion.scalar(select(exists().where(Gasto.partida_id == partida.id))) or sesion.scalar(
         select(exists().where(Avance.partida_id == partida.id))
     )

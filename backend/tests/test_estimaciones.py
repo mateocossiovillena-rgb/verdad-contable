@@ -295,3 +295,20 @@ def test_corregir_cantidades_despues_de_generar(cliente, dueno):
         headers=dueno,
     )
     assert r.json()["paso"] == "confirmada"
+
+
+def test_plano_a_partidas_con_presupuesto(cliente, dueno):
+    """Del plano al control de gastos: cada paso generado es una partida con su costo como presupuesto."""
+    obra = crear_obra(cliente, dueno)
+    e = _confirmada_ifc(cliente, dueno, obra["id"])
+    propuesta, e = _generar(cliente, dueno, e, "reemplazar")
+    ind = cliente.get(f"/api/obras/{obra['id']}/indicadores", headers=dueno).json()
+    del_cronograma = [p["partida"] for p in ind["partidas"] if p["partida"]["desde_cronograma"]]
+    assert len(del_cronograma) == len(propuesta["pasos"])
+    assert all(p["fecha_inicio"] and p["fecha_fin"] for p in del_cronograma)
+    assert ind["indicadores"]["bac"] == pytest.approx(propuesta["costo_total"])
+
+    # Reemplazar no duplica partidas.
+    _generar(cliente, dueno, e, "reemplazar")
+    ind = cliente.get(f"/api/obras/{obra['id']}/indicadores", headers=dueno).json()
+    assert sum(p["partida"]["desde_cronograma"] for p in ind["partidas"]) == len(propuesta["pasos"])

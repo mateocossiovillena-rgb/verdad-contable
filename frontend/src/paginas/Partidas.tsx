@@ -57,6 +57,7 @@ export function Partidas() {
                             {p.nombre}
                           </div>
                           <div className="text-sm text-stone-600">
+                            {p.desde_cronograma && "Cronograma · "}
                             {p.fase && `${p.fase} · `}
                             {p.fecha_inicio ? (
                               <span className="tabular-nums">
@@ -85,6 +86,10 @@ export function Partidas() {
                 </ul>
               </Tarjeta>
             )}
+            <p className="text-sm text-stone-600">
+              Cada actividad del cronograma aparece aquí sola, con sus fechas y su costo como presupuesto: se cambia
+              desde el cronograma. Agrega una partida suelta solo para lo que no está en el cronograma.
+            </p>
             <NuevaPartida obraId={obraId!} />
           </div>
 

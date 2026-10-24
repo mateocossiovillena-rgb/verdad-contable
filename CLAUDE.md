@@ -83,6 +83,9 @@ Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mis
         límite de intentos de ingreso (5 por cuenta / 20 por IP en 15 min, en memoria), `CLAVE_SECRETA`
         obligatoria con `ENTORNO=produccion`, datos demo con cronograma y ruta crítica, guion en
         `docs/guion-demo.md`; 111 tests. Entorno local: `backend/.venv` (`pip install -r requirements-dev.txt`).
+  - [x] Cronograma unido al EVM: cada actividad crea y mantiene su partida (fechas → PV, costo → BAC), así el
+        plano → cronograma → gastos/avance → semáforo es un solo flujo (docs/plan-mvp.md §7.3); 119 tests.
+        Bases con cronograma anterior: `python -m app.sincronizar` una vez tras `alembic upgrade head`.
   - [ ] Pendiente detectado: si "Gastos generales" tiene presupuesto se evalúa como partida normal y da alertas
         falsas ("sin fechas", "0 % de avance"); excluirla de esas reglas.
   - [ ] Íconos PNG, prueba en celular real

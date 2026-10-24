@@ -114,6 +114,9 @@ export function DetalleObra() {
                   <Dato titulo="Mano de obra (actividades)" valor={dinero(c.costo_mano_obra, c.obra.moneda)} />
                   <Dato titulo="Materiales (actividades)" valor={dinero(c.costo_materiales, c.obra.moneda)} />
                   <Dato titulo="Costo total de actividades" valor={dinero(c.costo_total, c.obra.moneda)} />
+                  <p className="col-span-full text-xs text-stone-600">
+                    Cada actividad es también una partida: ahí el encargado registra sus gastos y su avance.
+                  </p>
                 </div>
               </Tarjeta>
 

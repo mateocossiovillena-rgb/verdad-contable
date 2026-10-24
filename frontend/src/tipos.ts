@@ -61,6 +61,9 @@ export interface Partida {
   presupuesto: number;
   orden: number;
   es_generales: boolean;
+  /** Sale de una actividad del cronograma: se cambia desde allí, no desde Partidas. */
+  desde_cronograma: boolean;
+  actividad_id: number | null;
   porcentaje_avance: number;
 }
 

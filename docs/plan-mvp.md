@@ -113,5 +113,9 @@ Fuera del MVP: marketplace de insumos, cotizaciones de subcontratistas, compras 
 1. Equipo y maquinaria (mezcladora, vibradora, volqueta): nuevo valor `equipo` en `recurso_actividad.tipo`,
    con pago por día o por la actividad como la mano de obra.
 2. Comparar el costo de las actividades con `obra.presupuesto_total` (aviso si lo supera).
-3. Unir actividades con partidas (EVM): cada actividad aporta su costo como BAC y sus fechas como PV,
-   para que "gasté vs. debería" salga del mismo cronograma.
+3. ~~Unir actividades con partidas (EVM)~~ **hecho**: cada actividad tiene su partida (`partida.actividad_id`,
+   `desde_cronograma`), sincronizada en cada recálculo del cronograma (`servicios.sincronizar_partidas`):
+   nombre, fase, fechas (→ PV) y costo de mano de obra + materiales como presupuesto (→ BAC; si la actividad
+   no tiene costos se conserva el presupuesto). Esas partidas no se editan ni borran desde Partidas. Al borrar
+   la actividad se borra su partida, salvo que tenga gastos o avances: queda como partida suelta.
+   Partidas sueltas (manuales) siguen existiendo para lo que no está en el cronograma.

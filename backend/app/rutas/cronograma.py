@@ -52,7 +52,7 @@ def _cronograma(sesion: Session, obra: Obra) -> Cronograma:
 
     por_fase: dict[int, list[ActividadSalida]] = {f.id: [] for f in fases}
     for a in actividades:
-        datos = {r.id: _datos_recurso(r) for r in recursos[a.id]}
+        datos = {r.id: servicios.datos_recurso(r) for r in recursos[a.id]}
         costo = costos.costo_actividad(datos.values(), a.duracion_dias)
         por_fase[a.fase_id].append(
             ActividadSalida(
@@ -105,10 +105,6 @@ def _cronograma(sesion: Session, obra: Obra) -> Cronograma:
         costo_materiales=sum((a.costo_materiales for a in todas), Decimal("0")),
         costo_total=sum((a.costo_total for a in todas), Decimal("0")),
     )
-
-
-def _datos_recurso(r: RecursoActividad) -> costos.DatosRecurso:
-    return costos.DatosRecurso(tipo=r.tipo, cantidad=r.cantidad, precio_unitario=r.precio_unitario, por_dia=r.por_dia)
 
 
 def _recursos(entrada: list[RecursoEntrada]) -> list[RecursoActividad]:

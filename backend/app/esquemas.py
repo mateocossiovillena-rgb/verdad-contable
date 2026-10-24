@@ -150,6 +150,8 @@ class PartidaSalida(Modelo):
     presupuesto: Dinero
     orden: int
     es_generales: bool
+    desde_cronograma: bool = False
+    actividad_id: int | None = None
     porcentaje_avance: float = 0
 
 

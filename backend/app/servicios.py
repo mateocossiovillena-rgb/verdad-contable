@@ -14,9 +14,22 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import config
+from app.calculos import costos
 from app.calculos import cronograma as cr
 from app.calculos import valor_ganado as vg
-from app.modelos import Actividad, Avance, CierreDia, Dependencia, Gasto, Hito, Obra, Partida, Usuario
+from app.modelos import (
+    Actividad,
+    Avance,
+    CierreDia,
+    Dependencia,
+    Fase,
+    Gasto,
+    Hito,
+    Obra,
+    Partida,
+    RecursoActividad,
+    Usuario,
+)
 
 NOMBRE_GENERALES = "Gastos generales"
 _FIRMAS_IMAGEN = {b"\xff\xd8\xff": ".jpg", b"\x89PNG": ".png", b"RIFF": ".webp"}
@@ -256,11 +269,15 @@ def datos_cronograma(
 
 
 def recalcular_cronograma(sesion: Session, obra: Obra) -> None:
-    """Recalcula las fechas de todas las actividades y el fin de la obra. Hace flush antes."""
+    """Recalcula las fechas de todas las actividades y el fin de la obra, y sus partidas. Hace flush antes."""
     sesion.flush()
     actividades = actividades_de_obra(sesion, obra.id)
-    if not actividades:
-        return
+    if actividades:
+        _recalcular_fechas(obra, actividades, sesion)
+    sincronizar_partidas(sesion, obra, actividades)
+
+
+def _recalcular_fechas(obra: Obra, actividades: list[Actividad], sesion: Session) -> None:
     enlaces = {
         sucesora: [(d.predecesora_id, d.desfase_dias) for d in deps]
         for sucesora, deps in predecesoras_por_actividad(sesion, obra.id).items()
@@ -270,3 +287,65 @@ def recalcular_cronograma(sesion: Session, obra: Obra) -> None:
         a.fecha_inicio = fechas[a.id].inicio
         a.fecha_fin = fechas[a.id].fin
     obra.fecha_fin = max([obra.fecha_inicio] + [f.fin for f in fechas.values()])
+
+
+def datos_recurso(r: RecursoActividad) -> costos.DatosRecurso:
+    return costos.DatosRecurso(tipo=r.tipo, cantidad=r.cantidad, precio_unitario=r.precio_unitario, por_dia=r.por_dia)
+
+
+def tiene_registros(sesion: Session, partida_id: int) -> bool:
+    return bool(
+        sesion.scalar(select(func.count()).select_from(Gasto).where(Gasto.partida_id == partida_id))
+        or sesion.scalar(select(func.count()).select_from(Avance).where(Avance.partida_id == partida_id))
+    )
+
+
+def sincronizar_partidas(sesion: Session, obra: Obra, actividades: list[Actividad]) -> None:
+    """Cada actividad del cronograma tiene su partida, que es donde caen gastos y avances.
+
+    Así "gasté vs. debería" sale del mismo cronograma: la partida toma el nombre, la fase y las fechas de la
+    actividad, y su costo (mano de obra + materiales) como presupuesto. Si la actividad no tiene costos se
+    conserva el presupuesto que tenía la partida. Si la actividad se borra, su partida se borra también,
+    salvo que ya tenga gastos o avances: entonces queda como partida suelta para no perder el historial.
+    """
+    fases = sorted(sesion.scalars(select(Fase).where(Fase.obra_id == obra.id)), key=lambda f: (f.orden, f.id))
+    numero_fase = {f.id: i for i, f in enumerate(fases, 1)}
+    nombre_fase = {f.id: f.nombre for f in fases}
+    # populate_existing: la base pone actividad_id en NULL al borrar la actividad; no confiar en la copia en memoria.
+    vinculadas = list(
+        sesion.scalars(
+            select(Partida)
+            .where(Partida.obra_id == obra.id, Partida.desde_cronograma.is_(True))
+            .execution_options(populate_existing=True)
+        )
+    )
+    por_actividad = {p.actividad_id: p for p in vinculadas if p.actividad_id is not None}
+    vigentes = {a.id for a in actividades}
+
+    numero_en_fase: dict[int, int] = defaultdict(int)
+    ordenadas = sorted(actividades, key=lambda a: (numero_fase.get(a.fase_id, 0), a.orden, a.id))
+    for orden, a in enumerate(ordenadas, 1):
+        partida = por_actividad.get(a.id)
+        if partida is None:
+            partida = Partida(obra_id=obra.id, desde_cronograma=True, actividad_id=a.id, presupuesto=Decimal("0"))
+            sesion.add(partida)
+        numero_en_fase[a.fase_id] += 1
+        partida.codigo = f"{numero_fase.get(a.fase_id, 0)}.{numero_en_fase[a.fase_id]}"
+        partida.nombre = a.nombre
+        partida.fase = nombre_fase.get(a.fase_id, "")[:80]
+        partida.fecha_inicio = a.fecha_inicio
+        partida.fecha_fin = a.fecha_fin
+        partida.orden = orden
+        costo = costos.costo_actividad([datos_recurso(r) for r in a.recursos], a.duracion_dias).total
+        if costo > 0:
+            partida.presupuesto = costo
+
+    for partida in vinculadas:
+        if partida.actividad_id in vigentes:
+            continue
+        if tiene_registros(sesion, partida.id):
+            partida.desde_cronograma = False
+            partida.actividad_id = None
+        else:
+            sesion.delete(partida)
+    sesion.flush()

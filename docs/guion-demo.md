@@ -62,7 +62,8 @@ presupuesto. Entrar al detalle:
 
 **Paso 3 — ¿Dónde está el problema? (1 min).** *Partidas*: la losa del 2do piso en **rojo** (25 % de avance
 cuando debería ir mucho más) y los muros del 1er piso en amarillo. Luego la pestaña *Cronograma*: la losa
-está en la **ruta crítica** (en rojo), o sea que su atraso corre la fecha de entrega.
+está en la **ruta crítica** (en rojo), o sea que su atraso corre la fecha de entrega. Cada actividad del
+cronograma es la misma partida donde el maestro registra gastos y avance: un solo plan para todo.
 
 **Paso 4 — El celular del maestro de obra (1,5 min).** Darle el celular al constructor, con la sesión del
 encargado abierta:

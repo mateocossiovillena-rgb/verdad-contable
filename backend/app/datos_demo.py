@@ -91,7 +91,7 @@ def cargar() -> None:
         sesion.flush()
         sesion.add(Asignacion(usuario_id=encargado.id, obra_id=obra.id))
         generales = servicios.partida_generales(sesion, obra)
-        _cargar_cronograma(sesion, obra, inicio)
+        partidas: dict[str, Partida] = {}
 
         for orden, (codigo, nombre, fase, desde, dias, presupuesto, ritmo_avance, ritmo_gasto) in enumerate(
             PARTIDAS, 1
@@ -110,6 +110,7 @@ def cargar() -> None:
             )
             sesion.add(partida)
             sesion.flush()
+            partidas[codigo] = partida
             dia = p_inicio
             while dia <= min(p_fin, hoy - timedelta(days=1)):
                 fraccion_plan = ((dia - p_inicio).days + 1) / dias
@@ -137,6 +138,8 @@ def cargar() -> None:
                         )
                     )
                 dia += timedelta(days=1)
+
+        _cargar_cronograma(sesion, obra, inicio, partidas)
 
         for d in range(DIAS_TRANSCURRIDOS):
             fecha = inicio + timedelta(days=d)
@@ -182,8 +185,11 @@ def cargar() -> None:
         print("Listo. Dueño: demo@verdadcontable.bo / demo1234 · Encargado: 70000000 / PIN 123456")
 
 
-def _cargar_cronograma(sesion, obra: Obra, inicio) -> None:
-    """Una fase por cada fase de las partidas y una actividad por partida, con sus mismas fechas."""
+def _cargar_cronograma(sesion, obra: Obra, inicio, partidas: dict[str, Partida]) -> None:
+    """Una fase por cada fase de las partidas y una actividad por partida, con sus mismas fechas.
+
+    Cada partida queda unida a su actividad, como si la obra se hubiera armado desde el cronograma.
+    """
     fases: dict[str, Fase] = {}
     actividades: dict[str, Actividad] = {}
     sucesoras = {suc for _, suc, _ in DEPENDENCIAS}
@@ -206,6 +212,9 @@ def _cargar_cronograma(sesion, obra: Obra, inicio) -> None:
         )
         sesion.add(actividades[codigo])
     sesion.flush()
+    for codigo, partida in partidas.items():
+        partida.desde_cronograma = True
+        partida.actividad_id = actividades[codigo].id
     for pred, suc, espera in DEPENDENCIAS:
         sesion.add(
             Dependencia(predecesora_id=actividades[pred].id, sucesora_id=actividades[suc].id, desfase_dias=espera)
