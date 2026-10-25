@@ -1,0 +1,13 @@
+.git/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/node_modules/
+**/dist/
+**/*.db
+**/*.tsbuildinfo
+**/.pytest_cache/
+**/.ruff_cache/
+backend/fotos/
+backend/planos/
+.env

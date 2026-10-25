@@ -5,7 +5,7 @@ import hmac
 import secrets
 import time
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -76,7 +76,7 @@ intentos_ingreso = ControlIntentos()
 
 
 def crear_token(usuario: Usuario) -> str:
-    vence = datetime.now(timezone.utc) + timedelta(days=config.DIAS_SESION)
+    vence = datetime.now(UTC) + timedelta(days=config.DIAS_SESION)
     return jwt.encode({"sub": str(usuario.id), "exp": vence}, config.CLAVE_SECRETA, algorithm="HS256")
 
 

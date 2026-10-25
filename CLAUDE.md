@@ -49,7 +49,7 @@ Debe funcionar bien en celular (mobile first).
 
 ## Stack
 FastAPI + SQLAlchemy/Alembic + PostgreSQL (SQLite en local) · React + TypeScript + Vite + Tailwind (PWA).
-Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mismas comillas).
+Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
 
 ## Estado
 - [x] Fase 0: análisis funcional de la referencia → docs/analisis-referencia.md
@@ -89,5 +89,6 @@ Ver docs/plan-mvp.md. Python local: 3.10 (no usar f-strings anidados con las mis
   - [ ] Pendiente detectado: si "Gastos generales" tiene presupuesto se evalúa como partida normal y da alertas
         falsas ("sin fechas", "0 % de avance"); excluirla de esas reglas.
   - [ ] Íconos PNG, prueba en celular real
-  - [ ] Dockerfile, CI (GitHub Actions), README con instrucciones
+  - [x] Dockerfile, CI (GitHub Actions: lint, tests, migraciones en PostgreSQL, build), README, `railway.json`;
+        Python 3.12. Plan de publicación y cobro acordado: fotos a R2, respaldos, Brevo, cobros por QR.
 - [ ] Fase 3: piloto con 2 constructores
