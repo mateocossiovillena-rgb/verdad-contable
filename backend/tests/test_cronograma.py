@@ -1,6 +1,7 @@
 """Obra, fases, actividades, fechas por predecesoras y dependencias circulares."""
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -8,6 +9,7 @@ from app.calculos.cronograma import (
     DatosActividad,
     DependenciaCircular,
     Enlace,
+    a_dias,
     calcular_fechas,
     calcular_holguras,
     fin_de,
@@ -23,6 +25,15 @@ def act(id_, dias, *predecesoras, manual=None):
 
 
 # --- Cálculo puro ---
+
+
+class TestUnidadesDuracion:
+    @pytest.mark.parametrize(
+        ("cantidad", "unidad", "dias"),
+        [("3", "dias", 3), ("1", "semanas", 7), ("1.5", "semanas", 11), ("2", "meses", 60), ("0.1", "dias", 1)],
+    )
+    def test_a_dias(self, cantidad, unidad, dias):
+        assert a_dias(Decimal(cantidad), unidad) == dias
 
 
 class TestCalculoFechas:
@@ -238,6 +249,37 @@ def test_actividades_y_fechas_por_predecesoras(cliente, dueno):
     # Borrar la fase borra sus actividades.
     r = cliente.delete(f"/api/fases/{gruesa['id']}", headers=dueno)
     assert [a["nombre"] for f in r.json()["fases"] for a in f["actividades"]] == ["Eléctrica"]
+
+
+def test_duracion_en_semanas_o_meses(cliente, dueno):
+    obra = crear_obra(cliente, dueno)
+    fase = crear_fase(cliente, dueno, obra["id"], "Obra gruesa")
+    # Sin unidad, la duración va en semanas.
+    r = cliente.post(f"/api/fases/{fase['id']}/actividades", json={"nombre": "Pilastras", "duracion": 2}, headers=dueno)
+    assert r.status_code == 201, r.text
+    a = actividad(r.json(), "Pilastras")
+    assert (a["duracion_cantidad"], a["unidad_duracion"], a["duracion_dias"]) == (2, "semanas", 14)
+    assert (a["fecha_inicio"], a["fecha_fin"]) == ("2026-03-02", "2026-03-15")
+
+    r = cliente.put(
+        f"/api/actividades/{a['id']}",
+        json={"nombre": "Pilastras", "duracion": 1.5, "unidad_duracion": "meses"},
+        headers=dueno,
+    )
+    a = actividad(r.json(), "Pilastras")
+    assert (a["duracion_cantidad"], a["unidad_duracion"], a["duracion_dias"]) == (1.5, "meses", 45)
+
+    # Solo en días (como antes) sigue funcionando.
+    _, b = crear_actividad(cliente, dueno, fase["id"], "Vigas", 5)
+    assert (b["duracion_cantidad"], b["unidad_duracion"], b["duracion_dias"]) == (5, "dias", 5)
+
+    for malo in [
+        {"nombre": "X"},
+        {"nombre": "X", "duracion": 0},
+        {"nombre": "X", "duracion": 200, "unidad_duracion": "meses"},
+    ]:
+        r = cliente.post(f"/api/fases/{fase['id']}/actividades", json=malo, headers=dueno)
+        assert r.status_code == 422, malo
 
 
 def test_dependencia_circular_bloqueada(cliente, dueno):

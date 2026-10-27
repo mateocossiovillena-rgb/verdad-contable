@@ -60,6 +60,8 @@ def _cronograma(sesion: Session, obra: Obra) -> Cronograma:
                 fase_id=a.fase_id,
                 nombre=a.nombre,
                 duracion_dias=a.duracion_dias,
+                duracion_cantidad=None if a.duracion_cantidad is None else float(a.duracion_cantidad),
+                unidad_duracion=a.unidad_duracion,
                 inicio_manual=a.inicio_manual,
                 fecha_inicio=a.fecha_inicio,
                 fecha_fin=a.fecha_fin,
@@ -234,6 +236,8 @@ def crear_actividad(
         fase_id=fase.id,
         nombre=datos.nombre.strip(),
         duracion_dias=datos.duracion_dias,
+        duracion_cantidad=datos.duracion,
+        unidad_duracion=datos.unidad_duracion,
         inicio_manual=datos.inicio_manual,
         fecha_inicio=inicio,
         fecha_fin=cr.fin_de(inicio, datos.duracion_dias),
@@ -261,6 +265,8 @@ def editar_actividad(
         actividad.fase_id = destino.id
     actividad.nombre = datos.nombre.strip()
     actividad.duracion_dias = datos.duracion_dias
+    actividad.duracion_cantidad = datos.duracion
+    actividad.unidad_duracion = datos.unidad_duracion
     actividad.inicio_manual = datos.inicio_manual
     # Las predecesoras que siguen conservan su espera (ej. días de fraguado de una estimación).
     desfases = {d.predecesora_id: d.desfase_dias for d in actividad.predecesoras}

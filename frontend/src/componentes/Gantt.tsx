@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { fecha, fechaCorta } from "../formato";
+import { duracionTexto, fecha, fechaCorta } from "../formato";
 import type { Actividad, Cronograma } from "../tipos";
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -274,7 +274,7 @@ function Barra({
   const colores = a.critica ? COLOR_CRITICA : COLOR_ESTADO;
   const textoPendiente = a.critica ? "text-red-800" : "text-stone-700";
   const detalle =
-    `${a.nombre}: ${fecha(a.fecha_inicio)} – ${fecha(a.fecha_fin)} (${a.duracion_dias} d)` +
+    `${a.nombre}: ${fecha(a.fecha_inicio)} – ${fecha(a.fecha_fin)} (${duracionTexto(a)})` +
     (hoy === Number.NEGATIVE_INFINITY ? "" : ` · ${TEXTO_ESTADO[estado]}`) +
     `\n${textoHolgura(a.holgura_dias)}` +
     (despues.length ? `\nDespués de: ${despues.join(", ")}` : "");
@@ -285,7 +285,7 @@ function Barra({
         style={{ left: izquierda, width: Math.max(ancho, 4) }}
         title={detalle}
       >
-        {ancho >= 32 && `${a.duracion_dias} d`}
+        {ancho >= 40 && duracionTexto(a, true)}
       </div>
       {a.holgura_dias > 0 && (
         <div

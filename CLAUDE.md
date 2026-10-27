@@ -86,6 +86,8 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
   - [x] Cronograma unido al EVM: cada actividad crea y mantiene su partida (fechas → PV, costo → BAC), así el
         plano → cronograma → gastos/avance → semáforo es un solo flujo (docs/plan-mvp.md §7.3); 119 tests.
         Bases con cronograma anterior: `python -m app.sincronizar` una vez tras `alembic upgrade head`.
+  - [x] Duración de actividades en días, semanas (por defecto) o meses: se guarda cantidad + unidad y el backend
+        la convierte a `duracion_dias` (semana = 7, mes = 30, hacia arriba) con `cronograma.a_dias`; 125 tests.
   - [ ] Pendiente detectado: si "Gastos generales" tiene presupuesto se evalúa como partida normal y da alertas
         falsas ("sin fechas", "0 % de avance"); excluirla de esas reglas.
   - [ ] Íconos PNG, prueba en celular real

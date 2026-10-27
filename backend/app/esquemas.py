@@ -8,6 +8,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
+from app.calculos import cronograma as cr
+
 # El dinero se calcula con Decimal y se envía como número al navegador.
 Dinero = Annotated[Decimal, PlainSerializer(float, return_type=float, when_used="json")]
 DineroOpcional = Annotated[
@@ -347,14 +349,32 @@ class RecursoSalida(BaseModel):
     costo: Dinero
 
 
+UnidadDuracion = Literal["dias", "semanas", "meses"]
+
+
 class ActividadEntrada(BaseModel):
     nombre: str = Field(min_length=1, max_length=160)
-    duracion_dias: int = Field(ge=1, le=3650)
+    duracion: Decimal | None = Field(default=None, ge=Decimal("0.5"), le=3650, decimal_places=1)
+    unidad_duracion: UnidadDuracion = "semanas"
+    # Alternativa en días (compatibilidad); si viene `duracion`, se calcula a partir de ella.
+    duracion_dias: int | None = Field(default=None, ge=1, le=3650)
     inicio_manual: date | None = Field(default=None, description="Se ignora si hay predecesoras")
     predecesoras: list[int] = []
     fase_id: int | None = Field(default=None, description="Solo al editar, para mover de fase")
     # None = no tocar los recursos que ya tiene; [] = quitarlos todos.
     recursos: list[RecursoEntrada] | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def _duracion(self):
+        if self.duracion is not None:
+            self.duracion_dias = cr.a_dias(self.duracion, self.unidad_duracion)
+            if self.duracion_dias > 3650:
+                raise ValueError("La duración no puede pasar de 10 años")
+        elif self.duracion_dias is not None:
+            self.duracion, self.unidad_duracion = Decimal(self.duracion_dias), "dias"
+        else:
+            raise ValueError("Falta la duración")
+        return self
 
 
 class ActividadSalida(BaseModel):
@@ -362,6 +382,8 @@ class ActividadSalida(BaseModel):
     fase_id: int
     nombre: str
     duracion_dias: int
+    duracion_cantidad: float | None
+    unidad_duracion: str
     inicio_manual: date | None
     fecha_inicio: date
     fecha_fin: date

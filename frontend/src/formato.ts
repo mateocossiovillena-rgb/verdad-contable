@@ -48,6 +48,26 @@ export function leerMonto(texto: string): string | null {
   return limpio.includes(",") ? limpio.replace(/\./g, "").replace(",", ".") : limpio;
 }
 
+/** Días calendario por unidad de duración (igual que el backend). */
+export const DIAS_POR_UNIDAD = { dias: 1, semanas: 7, meses: 30 } as const;
+
+const NOMBRE_UNIDAD = {
+  dias: ["día", "días", "d"],
+  semanas: ["semana", "semanas", "sem"],
+  meses: ["mes", "meses", "mes"],
+} as const;
+
+/** Duración en la unidad que eligió el usuario: "3 semanas", "1,5 meses", "10 días" (o "3 sem" en corto). */
+export function duracionTexto(
+  a: { duracion_dias: number; duracion_cantidad: number | null; unidad_duracion: keyof typeof DIAS_POR_UNIDAD },
+  corto = false,
+): string {
+  const [cantidad, unidad] = a.duracion_cantidad === null ? [a.duracion_dias, "dias" as const] : [a.duracion_cantidad, a.unidad_duracion];
+  const [singular, plural, abreviada] = NOMBRE_UNIDAD[unidad];
+  const numero = String(cantidad).replace(".", ",");
+  return `${numero} ${corto ? abreviada : cantidad === 1 ? singular : plural}`;
+}
+
 /** Suma (o resta) días a una fecha ISO. */
 export function sumarDias(iso: string, dias: number): string {
   const d = new Date(iso.slice(0, 10) + "T12:00:00");

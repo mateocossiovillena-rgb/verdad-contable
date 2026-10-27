@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import { dinero, fecha, indice, leerMonto, pct } from "../formato";
-import type { Actividad, Cronograma, Fase, IndicadoresObra, Recurso, TipoRecurso } from "../tipos";
+import { DIAS_POR_UNIDAD, dinero, duracionTexto, fecha, indice, leerMonto, pct, sumarDias } from "../formato";
+import type { Actividad, Cronograma, Fase, IndicadoresObra, Recurso, TipoRecurso, UnidadDuracion } from "../tipos";
 import { Curva } from "../componentes/Curva";
 import { Gantt } from "../componentes/Gantt";
 import { Marco } from "../componentes/Marco";
@@ -505,7 +505,7 @@ function FilaActividad({
           {a.critica && <Pildora tono="problema">Ruta crítica</Pildora>}
         </div>
         <div className="text-sm tabular-nums text-stone-600">
-          {a.duracion_dias} día(s) · {fecha(a.fecha_inicio)} – {fecha(a.fecha_fin)}
+          {duracionTexto(a)} · {fecha(a.fecha_inicio)} – {fecha(a.fecha_fin)}
           {!a.critica && a.holgura_dias > 0 && ` · puede atrasarse ${a.holgura_dias} día(s)`}
         </div>
         {a.predecesoras.length > 0 && (
@@ -543,13 +543,20 @@ function FormActividad({
 }) {
   const cambio = useCambio(obraId);
   const [nombre, setNombre] = useState(actividad?.nombre ?? "");
-  const [duracion, setDuracion] = useState(String(actividad?.duracion_dias ?? 1));
+  // Actividad nueva: en semanas. Las que se crearon solo en días (o desde el plano) se editan en días.
+  const [duracion, setDuracion] = useState(
+    String(actividad ? (actividad.duracion_cantidad ?? actividad.duracion_dias) : 1).replace(".", ","),
+  );
+  const [unidad, setUnidad] = useState<UnidadDuracion>(
+    actividad ? (actividad.duracion_cantidad === null ? "dias" : actividad.unidad_duracion) : "semanas",
+  );
   const [inicio, setInicio] = useState(actividad?.inicio_manual ?? cronograma.obra.fecha_inicio);
   const [predecesoras, setPredecesoras] = useState<number[]>(actividad?.predecesoras ?? []);
   const [fase, setFase] = useState(faseId);
   const [confirmarBorrar, setConfirmarBorrar] = useState(false);
   const [recursos, setRecursos] = useState<FilaRecurso[]>(() => (actividad?.recursos ?? []).map(aFila));
-  const dias = Number(duracion) || 0;
+  const cantidad = Number(duracion.replace(",", ".")) || 0;
+  const dias = cantidad > 0 ? Math.max(Math.ceil(cantidad * DIAS_POR_UNIDAD[unidad]), 1) : 0;
 
   const alternar = (id: number) =>
     setPredecesoras(predecesoras.includes(id) ? predecesoras.filter((p) => p !== id) : [...predecesoras, id]);
@@ -558,7 +565,8 @@ function FormActividad({
     e.preventDefault();
     const cuerpo = {
       nombre,
-      duracion_dias: Number(duracion),
+      duracion: cantidad,
+      unidad_duracion: unidad,
       inicio_manual: predecesoras.length ? null : inicio || null,
       predecesoras,
       ...(actividad && { fase_id: fase }),
@@ -587,8 +595,30 @@ function FormActividad({
         <Entrada value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Muros de ladrillo" required autoFocus />
       </Campo>
       <div className="grid grid-cols-2 gap-3">
-        <Campo etiqueta="Duración (días)">
-          <Entrada type="number" inputMode="numeric" min={1} value={duracion} onChange={(e) => setDuracion(e.target.value)} required />
+        <Campo
+          etiqueta="Duración"
+          ayuda={
+            unidad !== "dias" && dias > 0
+              ? `= ${dias} días` + (!predecesoras.length && inicio ? ` · termina el ${fecha(sumarDias(inicio, dias - 1))}` : "")
+              : undefined
+          }
+        >
+          <div className="flex gap-2">
+            <Entrada
+              inputMode="decimal"
+              pattern="[0-9]+([.,][0-9])?"
+              title="Número entero o con un decimal (ej. 1,5)"
+              value={duracion}
+              onChange={(e) => setDuracion(e.target.value)}
+              className="w-16 min-w-0 flex-none"
+              required
+            />
+            <Selector value={unidad} onChange={(e) => setUnidad(e.target.value as UnidadDuracion)} aria-label="Unidad" className="min-w-0 flex-1">
+              <option value="dias">Días</option>
+              <option value="semanas">Semanas</option>
+              <option value="meses">Meses</option>
+            </Selector>
+          </div>
         </Campo>
         <Campo etiqueta="Fecha de inicio">
           <Entrada type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} disabled={predecesoras.length > 0} />

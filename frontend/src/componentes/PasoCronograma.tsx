@@ -33,6 +33,8 @@ function comoCronograma(p: Propuesta): Pick<Cronograma, "fases" | "hoy" | "fecha
           fase_id: i + 1,
           nombre: paso.nombre,
           duracion_dias: paso.duracion_dias,
+          duracion_cantidad: null,
+          unidad_duracion: "dias" as const,
           inicio_manual: null,
           fecha_inicio: paso.inicio,
           fecha_fin: paso.fin,

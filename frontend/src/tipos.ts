@@ -171,11 +171,16 @@ export interface Recurso {
   costo: number;
 }
 
+export type UnidadDuracion = "dias" | "semanas" | "meses";
+
 export interface Actividad {
   id: number;
   fase_id: number;
   nombre: string;
   duracion_dias: number;
+  /** Duración tal como la escribió el usuario; `duracion_dias` es su equivalente en días calendario. */
+  duracion_cantidad: number | null;
+  unidad_duracion: UnidadDuracion;
   inicio_manual: string | null;
   fecha_inicio: string;
   fecha_fin: string;

@@ -185,6 +185,9 @@ class Actividad(Base):
     fase_id: Mapped[int] = mapped_column(ForeignKey("fase.id", ondelete="CASCADE"), index=True)
     nombre: Mapped[str] = mapped_column(String(160))
     duracion_dias: Mapped[int] = mapped_column(Integer)
+    # Duración tal como la escribió el usuario (ej. 3 semanas); `duracion_dias` es su equivalente.
+    duracion_cantidad: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
+    unidad_duracion: Mapped[str] = mapped_column(String(10), default="dias", server_default="dias")
     # Lo que eligió el usuario; solo se usa si la actividad no tiene predecesoras.
     inicio_manual: Mapped[date | None] = mapped_column(Date)
     fecha_inicio: Mapped[date] = mapped_column(Date)

@@ -11,9 +11,11 @@ crítica: si esa actividad se atrasa un día, la entrega se atrasa un día.
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from decimal import Decimal
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,15 @@ class DependenciaCircular(ValueError):
     def __init__(self, ciclo: list[int]):
         self.ciclo = ciclo
         super().__init__("Dependencia circular entre actividades")
+
+
+# Días calendario por unidad de duración que elige el usuario.
+UNIDADES_DURACION = {"dias": 1, "semanas": 7, "meses": 30}
+
+
+def a_dias(cantidad: Decimal, unidad: str) -> int:
+    """Duración escrita por el usuario (ej. 1,5 semanas) en días calendario, redondeando hacia arriba."""
+    return max(math.ceil(Decimal(cantidad) * UNIDADES_DURACION[unidad]), 1)
 
 
 def fin_de(inicio: date, duracion_dias: int) -> date:
