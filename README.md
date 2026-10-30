@@ -36,6 +36,8 @@ Variables en el servicio de Railway:
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (referencia al servicio PostgreSQL) |
 | `CLAVE_SECRETA` | `python -c "import secrets; print(secrets.token_urlsafe(48))"` — nunca la misma que en local |
 | `ENTORNO` | `produccion` (ya viene en la imagen) |
+| `CARPETA_FOTOS` | `/data/fotos` |
+| `CARPETA_PLANOS` | `/data/planos` |
 
-Pendiente antes de abrir al público: fotos y planos en Cloudflare R2. Hoy se guardan en el disco del
-contenedor y **se pierden en cada publicación**.
+Fotos y planos van en un volumen de Railway montado en `/data`: sobrevive a cada publicación. Respaldo diario
+de PostgreSQL y restauración: `docs/piloto.md` §5. Pendiente: pasar las fotos a Cloudflare R2.

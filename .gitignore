@@ -1,9 +1,10 @@
 __pycache__/
 *.pyc
-.venv/
+.venv*/
 venv/
 node_modules/
 .env
+.env.*
 *.db
 *.sqlite3
 dist/
@@ -14,3 +15,5 @@ fotos/
 .pytest_cache/
 *.tsbuildinfo
 planos/
+respaldos/
+*.dump

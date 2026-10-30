@@ -1,0 +1,54 @@
+# Respaldo diario de la base de producción (PostgreSQL en Railway).
+# Cada respaldo se restaura en una base vacía antes de guardarse: si no se puede restaurar, el job falla
+# y GitHub avisa por correo. Los respaldos quedan como artefactos del repo (privado) durante 30 días.
+#
+# Requiere el secreto DATABASE_PUBLIC_URL: en Railway, servicio Postgres → Variables → DATABASE_PUBLIC_URL.
+# Para restaurar: scripts/restaurar.sh (ver docs/piloto.md §5).
+name: Respaldo
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 03:00 en Bolivia
+  workflow_dispatch:
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    services:
+      prueba:
+        image: postgres:17
+        env:
+          POSTGRES_USER: prueba
+          POSTGRES_PASSWORD: prueba
+          POSTGRES_DB: prueba
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Volcar la base de producción
+        env:
+          ORIGEN: ${{ secrets.DATABASE_PUBLIC_URL }}
+        run: |
+          test -n "$ORIGEN" || { echo "Falta el secreto DATABASE_PUBLIC_URL"; exit 1; }
+          mkdir -p respaldos
+          archivo="respaldos/verdad-contable-$(date -u +%Y%m%d-%H%M).dump"
+          docker run --rm --network host -v "$PWD/respaldos:/respaldos" postgres:17 \
+            pg_dump --format=custom --no-owner --no-privileges --dbname="$ORIGEN" --file="/$archivo"
+          echo "ARCHIVO=$archivo" >> "$GITHUB_ENV"
+          ls -lh respaldos
+
+      - name: Comprobar que se puede restaurar
+        run: |
+          scripts/restaurar.sh "$ARCHIVO" "postgresql://prueba:prueba@localhost:5432/prueba" --si
+          docker run --rm --network host postgres:17 psql "postgresql://prueba:prueba@localhost:5432/prueba" \
+            -c "select (select count(*) from usuario) usuarios, (select count(*) from obra) obras,
+                       (select count(*) from gasto) gastos, (select version_num from alembic_version) migracion"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-${{ github.run_id }}
+          path: respaldos/*.dump
+          retention-days: 30
+          if-no-files-found: error

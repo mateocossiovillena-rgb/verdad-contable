@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from app import servicios
+from app import config, servicios
 from app.db import FabricaSesion
 from app.modelos import (
     ROL_DUENO,
@@ -226,4 +226,7 @@ def _cargar_cronograma(sesion, obra: Obra, inicio, partidas: dict[str, Partida])
 
 
 if __name__ == "__main__":
+    if config.ENTORNO == "produccion":
+        # El usuario demo tiene clave pública (está en este archivo): nunca en el servidor real.
+        raise SystemExit("Los datos demo no se cargan con ENTORNO=produccion.")
     cargar()

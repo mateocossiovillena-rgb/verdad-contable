@@ -1,7 +1,7 @@
 .git/
 **/__pycache__/
 **/*.pyc
-**/.venv/
+**/.venv*/
 **/node_modules/
 **/dist/
 **/*.db
@@ -11,3 +11,6 @@
 backend/fotos/
 backend/planos/
 .env
+respaldos/
+*.dump
+.env.*
