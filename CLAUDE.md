@@ -94,4 +94,19 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
   - [ ] Prueba en celular real (antes de pasar el link a constructores)
   - [x] Dockerfile, CI (GitHub Actions: lint, tests, migraciones en PostgreSQL, build), README,
         `render.yaml` (Railway tenía cerradas las cuentas nuevas); Python 3.12. Plan de publicación y cobro acordado: fotos a R2, respaldos, Brevo, cobros por QR.
-- [ ] Fase 3: piloto con 2 constructores
+  - [x] Publicada en Render con el Blueprint (2026-10-30): https://verdad-contable.onrender.com,
+        `/api/salud` responde ok. Ver "Publicación" abajo.
+- [ ] Fase 3: piloto con 2 constructores → docs/piloto.md
+
+## Publicación (Render)
+- Blueprint `render.yaml`: servicio web `verdad-contable` (Docker, Starter, Virginia) + Postgres
+  `verdad-contable-db` (basic-256mb, PG 17) + disco de 1 GB en `/data` (fotos y planos). ~US$13–14/mes.
+- Se publica solo al hacer push a `main` si pasa GitHub Actions (`autoDeployTrigger: checksPass`).
+- Variables: `DATABASE_URL` (de la base), `CLAVE_SECRETA` (generada por Render), `ENTORNO=produccion`,
+  `CARPETA_FOTOS`, `CARPETA_PLANOS`.
+- Soporte: clave temporal de un dueño → Render → Shell → `python -m app.cambiar_clave correo`.
+- La API key de Render **nunca** va en el repo ni en este archivo; se usa como variable de entorno
+  `RENDER_API_KEY` fuera del proyecto.
+- Orden pendiente: 1) prueba en celular real 2) R2 (fotos y respaldos), correo con Brevo y recuperación de
+  clave, términos, anti-abuso, borrar cuenta 3) cobros (Bs 140/mes, QR, activación manual en panel admin)
+  4) dominio propio, Sentry + UptimeRobot, demo 5) abrir al público.
