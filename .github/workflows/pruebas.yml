@@ -1,4 +1,4 @@
-# Corre en cada push y pull request. Railway espera a que pase ("Wait for CI") antes de publicar.
+# Corre en cada push y pull request. Render publica solo si pasa (autoDeployTrigger: checksPass).
 name: Pruebas
 
 on:
@@ -57,7 +57,7 @@ jobs:
       - run: npm run build
 
   imagen:
-    # La misma imagen que construye Railway: si falla aquí, no llega a producción.
+    # La misma imagen que construye Render: si falla aquí, no llega a producción.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

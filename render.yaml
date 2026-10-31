@@ -1,0 +1,37 @@
+# Blueprint de Render: app web (misma imagen del Dockerfile) + PostgreSQL + disco para fotos y planos.
+# Render → New → Blueprint → elegir este repo. Costo aprox.: web Starter US$7 + Postgres Basic-256mb US$6
+# + 1 GB de base (US$0,30) + 1 GB de disco (US$0,25) al mes.
+services:
+  - type: web
+    name: verdad-contable
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: virginia
+    healthCheckPath: /api/salud
+    # Publica solo si pasaron las pruebas de GitHub Actions.
+    autoDeployTrigger: checksPass
+    disk:
+      name: datos
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: verdad-contable-db
+          property: connectionString
+      - key: CLAVE_SECRETA
+        generateValue: true
+      - key: ENTORNO
+        value: produccion
+      - key: CARPETA_FOTOS
+        value: /data/fotos
+      - key: CARPETA_PLANOS
+        value: /data/planos
+
+databases:
+  - name: verdad-contable-db
+    databaseName: verdad_contable
+    plan: basic-256mb
+    region: virginia
+    postgresMajorVersion: "17"

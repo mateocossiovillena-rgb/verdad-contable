@@ -1,4 +1,4 @@
-# Imagen única para Railway: FastAPI sirve la API en /api y la app web compilada en /.
+# Imagen única para Render: FastAPI sirve la API en /api y la app web compilada en /.
 
 # Etapa 1: compilar la app web (React + Vite).
 FROM node:22-slim AS web
@@ -21,6 +21,6 @@ COPY backend/ ./
 COPY --from=web /web/dist /app/frontend/dist
 
 # Migraciones antes de arrancar (una sola instancia, así que no compiten entre sí).
-# --proxy-headers: detrás del proxy de Railway, sin esto todas las peticiones llegan con la misma IP
+# --proxy-headers: detrás del proxy de Render, sin esto todas las peticiones llegan con la misma IP
 # y el límite de intentos por IP bloquearía a todos los usuarios a la vez.
 CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

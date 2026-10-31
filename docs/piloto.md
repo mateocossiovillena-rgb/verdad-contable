@@ -1,6 +1,6 @@
 # Piloto: puesta en marcha con un constructor
 
-Dirección de la app: **https://APP.up.railway.app** (Railway → servicio web → Settings → Networking).
+Dirección de la app: **https://verdad-contable.onrender.com** (Render → servicio verdad-contable).
 
 ## 1. Crear la cuenta del dueño
 
@@ -59,10 +59,11 @@ No hay que cerrar sesión: dura 30 días.
 
   ```bash
   scripts/restaurar.sh --bajar                    # baja el último respaldo a respaldos/
-  scripts/restaurar.sh respaldos/<archivo>.dump "<DATABASE_PUBLIC_URL de Railway>"
+  scripts/restaurar.sh respaldos/<archivo>.dump "<External Database URL de Render>"
   ```
 
   Pide escribir RESTAURAR porque borra lo que haya en la base destino. Conviene probar primero contra una
   base nueva y recién después contra producción.
-- Las fotos de comprobantes viven en el volumen de Railway (`/data`), que sobrevive a cada publicación pero
-  **no entra en este respaldo**. Pendiente: pasarlas a R2.
+- Las fotos de comprobantes viven en el disco de Render (`/data`), que sobrevive a cada publicación. Render
+  le saca una foto (snapshot) al disco cada día y la guarda 7 días; se restaura desde el panel del servicio
+  → Disks. Pendiente: pasar las fotos a R2.

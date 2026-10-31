@@ -1,8 +1,8 @@
-# Respaldo diario de la base de producción (PostgreSQL en Railway).
+# Respaldo diario de la base de producción (PostgreSQL en Render).
 # Cada respaldo se restaura en una base vacía antes de guardarse: si no se puede restaurar, el job falla
 # y GitHub avisa por correo. Los respaldos quedan como artefactos del repo (privado) durante 30 días.
 #
-# Requiere el secreto DATABASE_PUBLIC_URL: en Railway, servicio Postgres → Variables → DATABASE_PUBLIC_URL.
+# Requiere el secreto DATABASE_PUBLIC_URL: en Render, base verdad-contable-db → Connect → External Database URL.
 # Para restaurar: scripts/restaurar.sh (ver docs/piloto.md §5).
 name: Respaldo
 
