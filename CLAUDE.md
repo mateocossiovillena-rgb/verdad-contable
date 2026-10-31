@@ -88,9 +88,10 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
         Bases con cronograma anterior: `python -m app.sincronizar` una vez tras `alembic upgrade head`.
   - [x] Duración de actividades en días, semanas (por defecto) o meses: se guarda cantidad + unidad y el backend
         la convierte a `duracion_dias` (semana = 7, mes = 30, hacia arriba) con `cronograma.a_dias`; 125 tests.
-  - [ ] Pendiente detectado: si "Gastos generales" tiene presupuesto se evalúa como partida normal y da alertas
-        falsas ("sin fechas", "0 % de avance"); excluirla de esas reglas.
-  - [ ] Íconos PNG, prueba en celular real
+  - [x] "Gastos generales" como costo indirecto (nivel de esfuerzo: EV = PV, fechas de la obra si no tiene
+        propias): sin alertas de fechas ni avance y sin atrasar a la obra; íconos PNG 192/512;
+        `python -m app.cambiar_clave` para dar clave temporal a un dueño; 131 tests.
+  - [ ] Prueba en celular real (antes de pasar el link a constructores)
   - [x] Dockerfile, CI (GitHub Actions: lint, tests, migraciones en PostgreSQL, build), README,
         `render.yaml` (Railway tenía cerradas las cuentas nuevas); Python 3.12. Plan de publicación y cobro acordado: fotos a R2, respaldos, Brevo, cobros por QR.
 - [ ] Fase 3: piloto con 2 constructores

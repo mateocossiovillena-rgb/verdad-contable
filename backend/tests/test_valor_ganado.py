@@ -189,6 +189,36 @@ class TestObra:
         assert puntos[2].ac is None and puntos[2].ev is None
 
 
+class TestGastosGenerales:
+    def generales(self, **extra):
+        datos = dict(nombre="Gastos generales", presupuesto=D("2000"), es_generales=True)
+        datos.update(extra)
+        return DatosPartida(**datos)
+
+    def test_sin_fechas_ni_avance_no_da_avisos(self):
+        g = self.generales(gastos=[RegistroGasto(date(2026, 1, 1), D("100"))])
+        assert calcular_partida(g, date(2026, 2, 1)).advertencias == []
+
+    def test_se_gana_con_el_tiempo(self):
+        # Sin avance físico: EV = PV, así que su SPI es 1 y su CPI compara gasto contra tiempo.
+        g = self.generales(fecha_inicio=INICIO, fecha_fin=FIN, gastos=[RegistroGasto(INICIO, D("1500"))])
+        i = calcular_partida(g, date(2026, 1, 5)).indicadores
+        assert i.pv == i.ev == D("1000")
+        assert i.spi == 1
+        assert i.cpi == D("1000") / D("1500")
+
+    def test_no_atrasa_a_la_obra(self):
+        corte = date(2026, 1, 5)
+        a_tiempo = muro(avances=[RegistroAvance(corte, D("50"))])
+        g = self.generales(fecha_inicio=INICIO, fecha_fin=FIN)
+        assert calcular_obra([a_tiempo, g], corte).indicadores.spi == 1
+
+    def test_sigue_avisando_si_supera_su_presupuesto(self):
+        g = self.generales(gastos=[RegistroGasto(INICIO, D("2500"))])
+        codigos = [a.codigo for a in calcular_partida(g, FIN).advertencias]
+        assert codigos == ["gasto_supera_presupuesto"]
+
+
 class TestSemaforoYFrases:
     def test_semaforo(self):
         amarillo, rojo = D("0.9"), D("0.8")

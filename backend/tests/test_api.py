@@ -65,6 +65,19 @@ def test_obra_nueva_tiene_partida_generales(cliente, dueno):
     assert [p["es_generales"] for p in partidas] == [True]
 
 
+def test_gastos_generales_con_presupuesto_no_dan_alertas_falsas(cliente, dueno):
+    obra = crear_obra(cliente, dueno)
+    generales = cliente.get(f"/api/obras/{obra['id']}/partidas", headers=dueno).json()[0]
+    r = cliente.put(
+        f"/api/partidas/{generales['id']}", json={"nombre": "Gastos generales", "presupuesto": 5000}, headers=dueno
+    )
+    assert r.status_code == 200, r.text
+    r = cliente.post(f"/api/obras/{obra['id']}/gastos", json={"monto": 100, "tipo": "transporte"}, headers=dueno)
+    assert r.status_code == 201, r.text
+    mensajes = [a["mensaje"] for a in cliente.get("/api/alertas", headers=dueno).json()]
+    assert not any("Gastos generales" in m or "atrasad" in m for m in mensajes), mensajes
+
+
 def test_flujo_completo_e_indicadores(cliente, dueno):
     obra = crear_obra(cliente, dueno)
     muro = crear_partida(cliente, dueno, obra["id"])

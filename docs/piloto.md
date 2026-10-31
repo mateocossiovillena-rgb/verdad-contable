@@ -11,6 +11,10 @@ Lo hace el constructor (o tú con él), desde el celular o la computadora:
 3. Llenar **Tu nombre o el de tu empresa**, **Correo** y **Clave** (mínimo 8 caracteres).
 4. **Crear cuenta**. Queda dentro de la app, en **Obras**.
 
+Si el dueño olvida su clave (todavía no hay recuperación por correo): Render → servicio verdad-contable →
+**Shell** → `python -m app.cambiar_clave correo@del.dueno`. Imprime una clave temporal de 10 letras para
+pasársela por un canal privado.
+
 Cada dueño ve solo sus obras. No hay usuarios demo en producción: `python -m app.datos_demo` se niega a
 correr con `ENTORNO=produccion`.
 

@@ -88,6 +88,7 @@ def avance_actual_por_partida(sesion: Session, obra_id: int, corte: date) -> dic
 
 def datos_obra(sesion: Session, obra_id: int) -> list[tuple[Partida, vg.DatosPartida]]:
     """Partidas de la obra con su historial de avances y gastos (no anulados)."""
+    obra = sesion.get(Obra, obra_id)
     partidas = partidas_de_obra(sesion, obra_id)
     avances: dict[int, list[vg.RegistroAvance]] = defaultdict(list)
     for a in sesion.scalars(
@@ -104,10 +105,12 @@ def datos_obra(sesion: Session, obra_id: int) -> list[tuple[Partida, vg.DatosPar
                 id=p.id,
                 nombre=p.nombre,
                 presupuesto=p.presupuesto,
-                fecha_inicio=p.fecha_inicio,
-                fecha_fin=p.fecha_fin,
+                # Los gastos generales corren durante toda la obra si no tienen fechas propias.
+                fecha_inicio=p.fecha_inicio or (obra.fecha_inicio if p.es_generales else None),
+                fecha_fin=p.fecha_fin or (obra.fecha_fin if p.es_generales else None),
                 avances=avances[p.id],
                 gastos=gastos[p.id],
+                es_generales=p.es_generales,
             ),
         )
         for p in partidas

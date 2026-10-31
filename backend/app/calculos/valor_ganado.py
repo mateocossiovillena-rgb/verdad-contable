@@ -46,6 +46,9 @@ class DatosPartida:
     avances: Sequence[RegistroAvance] = ()
     gastos: Sequence[RegistroGasto] = ()
     id: int | None = None
+    # Gastos generales: costo indirecto sin avance físico. Se "gana" con el tiempo (EV = PV, nivel de esfuerzo
+    # en PMBOK), así no atrasa a la obra ni da avisos de fechas o avance.
+    es_generales: bool = False
 
 
 @dataclass(frozen=True)
@@ -169,13 +172,15 @@ def calcular_indicadores(bac: Decimal, pv: Decimal, ev: Decimal, ac: Decimal) ->
 
 def _advertencias_partida(p: DatosPartida, porcentaje: Decimal, ac: Decimal, corte: date) -> list[Advertencia]:
     avisos: list[Advertencia] = []
-    if p.presupuesto > 0 and (p.fecha_inicio is None or p.fecha_fin is None):
-        avisos.append(Advertencia("sin_fechas", "No tiene fechas: no se puede saber cuánto debería llevar."))
     if ac > p.presupuesto:
         if p.presupuesto == 0:
             avisos.append(Advertencia("gasto_sin_presupuesto", "Tiene gastos pero no tiene presupuesto."))
         else:
             avisos.append(Advertencia("gasto_supera_presupuesto", "Lo gastado ya supera su presupuesto."))
+    if p.es_generales:
+        return avisos
+    if p.presupuesto > 0 and (p.fecha_inicio is None or p.fecha_fin is None):
+        avisos.append(Advertencia("sin_fechas", "No tiene fechas: no se puede saber cuánto debería llevar."))
     fechas_gasto = [g.fecha for g in p.gastos if g.fecha <= corte]
     if fechas_gasto and porcentaje == 0:
         dias = (corte - min(fechas_gasto)).days
@@ -191,7 +196,7 @@ def calcular_partida(p: DatosPartida, corte: date) -> ResultadoPartida:
     porcentaje = avance_a_la_fecha(p.avances, corte)
     ac = costo_a_la_fecha(p.gastos, corte)
     pv = p.presupuesto * fraccion if fraccion is not None else CERO
-    ev = p.presupuesto * porcentaje / CIEN
+    ev = pv if p.es_generales else p.presupuesto * porcentaje / CIEN
     return ResultadoPartida(
         datos=p,
         porcentaje_avance=porcentaje,

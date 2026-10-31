@@ -1,9 +1,9 @@
 // Service worker mínimo: guarda la app para que abra sin señal.
 // Los datos (/api) siempre van a la red; los registros sin señal los maneja la cola de la app.
-const CACHE = "verdad-contable-v1";
+const CACHE = "verdad-contable-v2";
 
 self.addEventListener("install", (evento) => {
-  evento.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icono.svg"])));
+  evento.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icono.svg", "/icono-192.png", "/icono-512.png"])));
   self.skipWaiting();
 });
 
