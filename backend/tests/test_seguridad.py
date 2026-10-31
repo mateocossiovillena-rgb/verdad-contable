@@ -70,8 +70,11 @@ def test_bloqueo_por_ip_con_muchas_cuentas(cliente, monkeypatch):
     assert _ingresar(cliente, "70000009", "123456").status_code == 429
 
 
+PG = "postgresql://usuario:clave@localhost:5432/verdad_contable"
+
+
 def _importar_config(**variables):
-    entorno = {k: v for k, v in os.environ.items() if k not in ("ENTORNO", "CLAVE_SECRETA")}
+    entorno = {k: v for k, v in os.environ.items() if k not in ("ENTORNO", "CLAVE_SECRETA", "DATABASE_URL")}
     entorno.update(variables)
     return subprocess.run(
         [sys.executable, "-c", "import app.config"], cwd=RAIZ_BACKEND, env=entorno, capture_output=True, text=True
@@ -83,4 +86,10 @@ def test_produccion_exige_clave_secreta():
     assert r.returncode != 0
     assert "CLAVE_SECRETA" in r.stderr
     assert _importar_config(ENTORNO="produccion", CLAVE_SECRETA="corta").returncode != 0
-    assert _importar_config(ENTORNO="produccion", CLAVE_SECRETA="x" * 40).returncode == 0
+    assert _importar_config(ENTORNO="produccion", CLAVE_SECRETA="x" * 40, DATABASE_URL=PG).returncode == 0
+
+
+def test_produccion_no_arranca_con_sqlite():
+    r = _importar_config(ENTORNO="produccion", CLAVE_SECRETA="x" * 40)
+    assert r.returncode != 0
+    assert "DATABASE_URL" in r.stderr

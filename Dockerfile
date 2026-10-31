@@ -20,7 +20,8 @@ COPY backend/ ./
 # config.CARPETA_FRONTEND apunta por defecto a ../frontend/dist.
 COPY --from=web /web/dist /app/frontend/dist
 
-# Migraciones antes de arrancar (una sola instancia, así que no compiten entre sí).
+# Migraciones antes de arrancar (una sola instancia, así que no compiten entre sí). Reintenta hasta 2 min
+# porque al crear o reiniciar la base en Render puede tardar en aceptar conexiones.
 # --proxy-headers: detrás del proxy de Render, sin esto todas las peticiones llegan con la misma IP
 # y el límite de intentos por IP bloquearía a todos los usuarios a la vez.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "n=0; until alembic upgrade head; do n=$((n+1)); [ $n -ge 24 ] && exit 1; echo 'Base no disponible, reintento en 5 s'; sleep 5; done; exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

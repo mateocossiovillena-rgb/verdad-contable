@@ -23,6 +23,9 @@ if ENTORNO == "produccion" and len(CLAVE_SECRETA) < 32:
         "En producción CLAVE_SECRETA es obligatoria y debe tener al menos 32 caracteres. "
         'Genera una con: python -c "import secrets; print(secrets.token_urlsafe(48))"'
     )
+if ENTORNO == "produccion" and DATABASE_URL.startswith("sqlite"):
+    # Sin esto, si DATABASE_URL falta el servidor arranca con SQLite en un disco que se borra en cada publicación.
+    raise RuntimeError("En producción DATABASE_URL es obligatoria (PostgreSQL), no SQLite.")
 if not CLAVE_SECRETA:
     CLAVE_SECRETA = "solo-para-desarrollo-cambiar-en-produccion"
     warnings.warn("CLAVE_SECRETA no está definida: usando una clave de desarrollo.", stacklevel=1)
