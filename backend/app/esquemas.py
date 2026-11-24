@@ -155,6 +155,7 @@ class PartidaSalida(Modelo):
     desde_cronograma: bool = False
     actividad_id: int | None = None
     porcentaje_avance: float = 0
+    regla_medicion: str = "porcentaje"
 
 
 class HitoEntrada(BaseModel):
@@ -287,6 +288,23 @@ class PuntoCurvaSalida(BaseModel):
     ac: DineroOpcional
 
 
+ReglaMedicion = Literal["porcentaje", "0_100", "50_50"]
+
+
+class MedicionEntrada(BaseModel):
+    regla_medicion: ReglaMedicion
+
+
+class PronosticoSalida(BaseModel):
+    clave: str
+    nombre: str
+    formula: str
+    supuesto: str
+    eac: DineroOpcional
+    etc: DineroOpcional
+    vac: DineroOpcional
+
+
 class IndicadoresObra(BaseModel):
     obra: ObraSalida
     corte: date
@@ -297,6 +315,10 @@ class IndicadoresObra(BaseModel):
     partidas: list[PartidaIndicadores]
     curva: list[PuntoCurvaSalida]
     hitos: list[HitoSalida]
+    # Pronóstico AACE 80R-13 y contra qué se mide (línea base vigente o plan sin aprobar).
+    pronosticos: list[PronosticoSalida] = []
+    tcpi: float | None = None
+    linea_base_version: int | None = None
 
 
 class Alerta(BaseModel):

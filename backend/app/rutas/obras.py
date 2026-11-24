@@ -17,16 +17,19 @@ from app.esquemas import (
     HitoSalida,
     IndicadoresObra,
     IndicadoresSalida,
+    MedicionEntrada,
     ObraEntrada,
     ObraResumen,
     ObraSalida,
     PartidaEntrada,
     PartidaIndicadores,
     PartidaSalida,
+    PronosticoSalida,
     PuntoCurvaSalida,
 )
 from app.modelos import ROL_DUENO, Avance, Gasto, Hito, Obra, Partida, Usuario
 from app.seguridad import ids_obras_visibles, obra_propia, obra_visible, solo_dueno, usuario_actual
+from app.tcm import pronostico as pr
 
 rutas = APIRouter(prefix="/api", tags=["obras"])
 
@@ -161,6 +164,14 @@ def indicadores_obra(
             for p in curva
         ],
         hitos=[HitoSalida.model_validate(h) for h in servicios.hitos_de_obra(sesion, obra.id)],
+        pronosticos=[
+            PronosticoSalida(
+                clave=p.clave, nombre=p.nombre, formula=p.formula, supuesto=p.supuesto, eac=p.eac, etc=p.etc, vac=p.vac
+            )
+            for p in pr.pronosticos(resultado.indicadores)
+        ],
+        tcpi=_f(pr.tcpi(resultado.indicadores)),
+        linea_base_version=base.version if (base := servicios.linea_base_vigente(sesion, obra.id)) else None,
     )
 
 
@@ -233,6 +244,22 @@ def editar_partida(
         partida.fecha_inicio = None
     if datos.fecha_fin is None:
         partida.fecha_fin = None
+    sesion.commit()
+    return partida
+
+
+@rutas.put("/partidas/{partida_id}/medicion", response_model=PartidaSalida)
+def cambiar_medicion(
+    partida_id: int,
+    datos: MedicionEntrada,
+    dueno: Usuario = Depends(solo_dueno),
+    sesion: Session = Depends(obtener_sesion),
+):
+    """Regla de medición del avance (% físico, 0/100 o 50/50). Vale también para partidas del cronograma."""
+    partida = _partida_propia(sesion, dueno, partida_id)
+    if partida.es_generales:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Los gastos generales se ganan con el tiempo: no tienen regla")
+    partida.regla_medicion = datos.regla_medicion
     sesion.commit()
     return partida
 

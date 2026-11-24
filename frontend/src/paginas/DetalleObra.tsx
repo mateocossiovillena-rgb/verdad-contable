@@ -190,28 +190,34 @@ function Resumen({ obraId }: { obraId: string }) {
   };
   const indices: { sigla: string; valor: string; tono: Tono; explicacion: string }[] = [
     {
-      sigla: "SPI",
+      sigla: "SPI = EV / PV",
       valor: indice(i.spi),
       tono: tonoIndice(i.spi, d),
       explicacion: "Cronograma: menos de 1 = vas atrasado.",
     },
     {
-      sigla: "CPI",
+      sigla: "CPI = EV / AC",
       valor: indice(i.cpi),
       tono: tonoIndice(i.cpi, d),
       explicacion: "Costo: menos de 1 = gastas más de lo que avanzas.",
     },
     {
-      sigla: "SV",
+      sigla: "SV = EV − PV",
       valor: dinero(i.sv, m),
       tono: i.pv === 0 ? "neutro" : i.sv < 0 ? "atencion" : "bien",
       explicacion: "Lo avanzado menos lo planificado, en dinero.",
     },
     {
-      sigla: "CV",
+      sigla: "CV = EV − AC",
       valor: dinero(i.cv, m),
       tono: i.ac === 0 ? "neutro" : i.cv < 0 ? "atencion" : "bien",
       explicacion: "Lo avanzado menos lo gastado, en dinero.",
+    },
+    {
+      sigla: "TCPI = (BAC − EV) / (BAC − AC)",
+      valor: indice(d.tcpi),
+      tono: d.tcpi === null || i.ac === 0 ? "neutro" : d.tcpi > 1.1 ? "problema" : d.tcpi > 1 ? "atencion" : "bien",
+      explicacion: "Eficiencia que necesitas de aquí al final para terminar dentro del BAC. Más de 1 = hay que mejorar.",
     },
   ];
 
@@ -251,9 +257,76 @@ function Resumen({ obraId }: { obraId: string }) {
           />
         </Tarjeta>
 
+        <Tarjeta className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold text-stone-900">Valor ganado (AACE 82R-13)</h2>
+            <span className="text-sm text-stone-600">
+              {d.linea_base_version ? `Contra la línea base v${d.linea_base_version}` : "Sin línea base aprobada: mide contra el plan"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {VALORES_EVM.map((x) => (
+              <div key={x.sigla} title={x.eq ? `${x.sigla} (AACE) = ${x.eq} (nomenclatura clásica)` : x.nombre}>
+                <Metrica
+                  etiqueta={`${x.sigla} · ${x.nombre}`}
+                  valor={dinero(i[x.campo], m)}
+                  detalle={x.eq ? `Equivale a ${x.eq}` : d.linea_base_version ? "De la línea base" : "Del plan"}
+                />
+              </div>
+            ))}
+          </div>
+        </Tarjeta>
+
         <Tarjeta>
-          <h2 className="mb-3 font-semibold text-stone-900">Curva de avance y gasto</h2>
+          <h2 className="mb-3 font-semibold text-stone-900">Curva S: PV, EV y AC</h2>
           <Curva puntos={d.curva} hitos={d.hitos} corte={d.corte} />
+        </Tarjeta>
+
+        <Tarjeta className="p-0">
+          <div className="px-4 pb-2 pt-4">
+            <h2 className="font-semibold text-stone-900">Pronóstico del costo final (AACE 80R-13)</h2>
+            <p className="text-sm text-stone-600">
+              Tres formas de estimar cuánto costará la obra (EAC), según qué supongas sobre lo que falta. ETC = lo que falta
+              gastar; VAC = BAC − EAC (negativo = sobrecosto).
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-xs font-medium uppercase tracking-wider text-stone-500">
+                <tr>
+                  <th className="px-4 py-2 text-left">Supuesto</th>
+                  <th className="px-3 py-2 text-right">EAC</th>
+                  <th className="px-3 py-2 text-right">ETC</th>
+                  <th className="px-4 py-2 text-right">VAC</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {d.pronosticos.map((p) => (
+                  <tr key={p.clave}>
+                    <td className="px-4 py-2.5">
+                      <div className="font-medium text-stone-900">{p.nombre}</div>
+                      <div className="font-mono text-xs text-stone-600">{p.formula}</div>
+                      <div className="text-xs text-stone-600">{p.supuesto}</div>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-stone-900">{dinero(p.eac, m)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-stone-900">{dinero(p.etc, m)}</td>
+                    <td
+                      className={`whitespace-nowrap px-4 py-2.5 text-right align-top tabular-nums ${
+                        p.vac !== null && p.vac < 0 ? "text-red-700" : "text-stone-900"
+                      }`}
+                    >
+                      {dinero(p.vac, m)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {i.ac === 0 && (
+            <p className="px-4 pb-4 pt-2 text-sm text-stone-600">
+              Sin gastos ni avance todavía: los pronósticos por índices aparecen al registrarlos.
+            </p>
+          )}
         </Tarjeta>
       </div>
 
@@ -319,6 +392,13 @@ function Resumen({ obraId }: { obraId: string }) {
     </div>
   );
 }
+
+const VALORES_EVM: { sigla: string; nombre: string; eq: string; campo: "bac" | "pv" | "ev" | "ac" }[] = [
+  { sigla: "BAC", nombre: "Presupuesto a la conclusión", eq: "", campo: "bac" },
+  { sigla: "PV", nombre: "Valor planificado", eq: "BCWS", campo: "pv" },
+  { sigla: "EV", nombre: "Valor ganado", eq: "BCWP", campo: "ev" },
+  { sigla: "AC", nombre: "Costo real", eq: "ACWP", campo: "ac" },
+];
 
 function Dato({ titulo, valor }: { titulo: string; valor: string }) {
   return (

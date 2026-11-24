@@ -285,4 +285,9 @@ def crear_obra_desde_plantilla(sesion: Session, dueno: Usuario, d: ObraLeida) ->
             Dependencia(predecesora_id=actividades[p].id, sucesora_id=actividades[a.codigo].id) for p in a.predecesoras
         ]
     servicios.recalcular_cronograma(sesion, obra)
+    reglas = {actividades[a.codigo].id: a.regla for a in d.actividades}
+    for partida in servicios.partidas_de_obra(sesion, obra.id):
+        if partida.actividad_id in reglas:
+            partida.regla_medicion = reglas[partida.actividad_id]
+    sesion.flush()
     return obra

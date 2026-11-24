@@ -64,7 +64,11 @@ COLUMNAS_ACTIVIDADES = [
     ("Unidad de duración *", 14, "días, semanas o meses"),
     ("Predecesoras", 16, "Códigos separados por coma. Ej. 1.1, 1.2"),
     ("Inicio fijo", 13, "Opcional, dd/mm/aaaa. Solo si no tiene predecesoras"),
+    ("Regla de medición", 13, "Cómo se gana el valor: % físico (por defecto), 0/100 o 50/50"),
 ]
+REGLAS_TEXTO = {"porcentaje": "% físico", "0_100": "0/100", "50_50": "50/50"}
+REGLA_DE_TEXTO = {"%fisico": "porcentaje", "fisico": "porcentaje", "porcentaje": "porcentaje", "0/100": "0_100",
+                  "50/50": "50_50"}  # fmt: skip
 COLUMNAS_INSUMOS = [
     ("Código de actividad *", 12, "El de la hoja Actividades"),
     ("Tipo *", 14, "Material, Mano de obra o Equipo"),
@@ -133,6 +137,7 @@ class ActividadLeida:
     unidad_duracion: str
     predecesoras: list[str]
     inicio: date | None
+    regla: str = "porcentaje"
 
 
 @dataclass
@@ -307,6 +312,7 @@ def escribir_plantilla(datos: ObraLeida | None = None) -> bytes:
             {"dias": "días"}.get(a.unidad_duracion, a.unidad_duracion),
             ", ".join(a.predecesoras),
             a.inicio,
+            REGLAS_TEXTO.get(a.regla, "% físico"),
         ]
         for col, valor in enumerate(valores_fila, 1):
             hoja.cell(row=fila, column=col, value=valor)
@@ -316,6 +322,7 @@ def escribir_plantilla(datos: ObraLeida | None = None) -> bytes:
     _numero(hoja, f"F2:F{ultima}", 0, mayor=True)
     _lista(hoja, ["días", "semanas", "meses"], f"G2:G{ultima}", "Unidad de duración")
     _fecha(hoja, f"I2:I{ultima}")
+    _lista(hoja, list(REGLAS_TEXTO.values()), f"J2:J{ultima}", "Regla de medición")
 
     # APU-Insumos
     hoja = libro.create_sheet(HOJA_INSUMOS)
@@ -534,9 +541,14 @@ def _leer_actividades(hoja: Worksheet, obra: ObraLeida, v: _Validador) -> None:
             v.error(h, n, "Inicio fijo", "Fecha incoherente: es anterior al inicio de la obra.")
         if len(nombre) > 160 or len(codigo) > 20 or len(unidad) > 20 or len(fase) > 120:
             v.error(h, n, "Texto", "Algún texto es demasiado largo.")
-        if codigo and computo is not None and duracion is not None and unidad_dur:
+        regla = REGLA_DE_TEXTO.get(_normal(valores[9]).replace(" ", "")) if _texto(valores[9]) else "porcentaje"
+        if regla is None:
+            v.error(h, n, "Regla de medición", "Debe ser % físico, 0/100 o 50/50.")
+        if codigo and computo is not None and duracion is not None and unidad_dur and regla:
             obra.actividades.append(
-                ActividadLeida(n, codigo, fase, nombre, unidad, computo, duracion, unidad_dur, predecesoras, inicio)
+                ActividadLeida(
+                    n, codigo, fase, nombre, unidad, computo, duracion, unidad_dur, predecesoras, inicio, regla
+                )
             )
     if not obra.actividades and not any(e.hoja == h for e in v.errores):
         v.error(h, None, "", "No hay actividades cargadas.")

@@ -101,6 +101,8 @@ class Partida(Base):
     # actividad y se actualizan en cada recálculo (`servicios.sincronizar_partidas`).
     desde_cronograma: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     actividad_id: Mapped[int | None] = mapped_column(ForeignKey("actividad.id", ondelete="SET NULL"), unique=True)
+    # Cómo se convierte el % de avance físico en valor ganado: "porcentaje", "0_100" o "50_50".
+    regla_medicion: Mapped[str] = mapped_column(String(12), default="porcentaje", server_default="porcentaje")
 
     obra: Mapped[Obra] = relationship(back_populates="partidas")
 

@@ -23,6 +23,12 @@ CIEN = Decimal("100")
 
 DIAS_GASTO_SIN_AVANCE = 7
 
+# Regla de medición del avance para el valor ganado (AACE 82R-13):
+# - "porcentaje": % físico estimado (EV = BAC × % avance).
+# - "0_100": no se gana nada hasta terminar (EV = 0 hasta llegar a 100 %).
+# - "50_50": se gana la mitad al empezar y la otra mitad al terminar.
+REGLAS_MEDICION = {"porcentaje": "% físico", "0_100": "0/100", "50_50": "50/50"}
+
 
 @dataclass(frozen=True)
 class RegistroAvance:
@@ -49,6 +55,7 @@ class DatosPartida:
     # Gastos generales: costo indirecto sin avance físico. Se "gana" con el tiempo (EV = PV, nivel de esfuerzo
     # en PMBOK), así no atrasa a la obra ni da avisos de fechas o avance.
     es_generales: bool = False
+    regla_medicion: str = "porcentaje"
 
 
 @dataclass(frozen=True)
@@ -150,6 +157,17 @@ def costo_a_la_fecha(gastos: Sequence[RegistroGasto], corte: date) -> Decimal:
     return sum((g.monto for g in gastos if g.fecha <= corte), CERO)
 
 
+def fraccion_ganada(porcentaje: Decimal, regla: str) -> Decimal:
+    """Parte del presupuesto ganada según la regla de medición, a partir del % de avance físico."""
+    if regla == "0_100":
+        return UNO if porcentaje >= CIEN else CERO
+    if regla == "50_50":
+        if porcentaje >= CIEN:
+            return UNO
+        return Decimal("0.5") if porcentaje > 0 else CERO
+    return porcentaje / CIEN
+
+
 def calcular_indicadores(bac: Decimal, pv: Decimal, ev: Decimal, ac: Decimal) -> Indicadores:
     cpi = dividir(ev, ac)
     # EAC = BAC / CPI, escrito como BAC * AC / EV para no arrastrar decimales periódicos.
@@ -196,7 +214,7 @@ def calcular_partida(p: DatosPartida, corte: date) -> ResultadoPartida:
     porcentaje = avance_a_la_fecha(p.avances, corte)
     ac = costo_a_la_fecha(p.gastos, corte)
     pv = p.presupuesto * fraccion if fraccion is not None else CERO
-    ev = pv if p.es_generales else p.presupuesto * porcentaje / CIEN
+    ev = pv if p.es_generales else p.presupuesto * fraccion_ganada(porcentaje, p.regla_medicion)
     return ResultadoPartida(
         datos=p,
         porcentaje_avance=porcentaje,

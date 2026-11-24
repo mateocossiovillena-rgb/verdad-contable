@@ -71,15 +71,15 @@ export function Curva({ puntos, hitos, corte }: { puntos: PuntoCurva[]; hitos: H
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums text-stone-700">
         <span>
           <span className="mr-1 inline-block w-4 border-t-2 border-dashed border-stone-500 align-middle" />
-          Debería (plan): {bs(puntos.find((p) => p.fecha === corte)?.pv)}
+          PV · debería (plan): {bs(puntos.find((p) => p.fecha === corte)?.pv)}
         </span>
         <span>
           <span className="mr-1 inline-block w-4 border-t-[3px] border-emerald-600 align-middle" />
-          Avanzado (valor ganado)
+          EV · avanzado (valor ganado)
         </span>
         <span>
           <span className="mr-1 inline-block w-4 border-t-[3px] border-marca-600 align-middle" />
-          Gastado
+          AC · gastado (costo real)
         </span>
         {hitos.length > 0 && (
           <span>

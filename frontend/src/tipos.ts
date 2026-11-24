@@ -65,6 +65,20 @@ export interface Partida {
   desde_cronograma: boolean;
   actividad_id: number | null;
   porcentaje_avance: number;
+  regla_medicion: ReglaMedicion;
+}
+
+/** Cómo se convierte el % físico en valor ganado (AACE 82R-13). */
+export type ReglaMedicion = "porcentaje" | "0_100" | "50_50";
+
+export interface Pronostico {
+  clave: "atipico" | "cpi" | "cpi_spi";
+  nombre: string;
+  formula: string;
+  supuesto: string;
+  eac: number | null;
+  etc: number | null;
+  vac: number | null;
 }
 
 export interface Hito {
@@ -148,6 +162,9 @@ export interface IndicadoresObra {
   partidas: PartidaIndicadores[];
   curva: PuntoCurva[];
   hitos: Hito[];
+  pronosticos: Pronostico[];
+  tcpi: number | null;
+  linea_base_version: number | null;
 }
 
 export interface Alerta {

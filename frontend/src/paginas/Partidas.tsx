@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import { dinero, fecha, leerMonto, pct } from "../formato";
-import type { IndicadoresObra } from "../tipos";
+import type { IndicadoresObra, ReglaMedicion } from "../tipos";
 import { Marco } from "../componentes/Marco";
 import { IconoCheck, IconoLadrillos, IconoMas } from "../componentes/iconos";
 import {
@@ -17,6 +17,7 @@ import {
   MensajeError,
   Pildora,
   PildoraSemaforo,
+  Selector,
   Tarjeta,
 } from "../componentes/ui";
 
@@ -71,11 +72,17 @@ export function Partidas() {
                         {!p.es_generales && <PildoraSemaforo valor={semaforo} />}
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-sm tabular-nums">
-                        <Dato titulo="Presupuesto" valor={dinero(p.presupuesto, moneda)} />
+                        <Dato
+                          titulo={d.linea_base_version ? `BAC (línea base v${d.linea_base_version})` : "Presupuesto"}
+                          valor={dinero(i.bac, moneda)}
+                        />
                         <Dato titulo="Gastado" valor={dinero(i.ac, moneda)} />
                         <Dato titulo="Avance" valor={p.es_generales ? "—" : `${Math.round(porcentaje_avance)} %`} />
                       </div>
                       {!p.es_generales && <BarraAvance real={porcentaje_avance / 100} plan={i.avance_planificado} semaforo={semaforo} />}
+                      {!p.es_generales && (
+                        <ReglaPartida obraId={obraId!} partidaId={p.id} regla={p.regla_medicion} ev={dinero(i.ev, moneda)} />
+                      )}
                       {advertencias.map((a) => (
                         <p key={a.codigo} className="text-sm text-amber-800">
                           {a.mensaje}
@@ -126,6 +133,49 @@ export function Partidas() {
         </div>
       )}
     </Marco>
+  );
+}
+
+const REGLAS: { valor: ReglaMedicion; texto: string }[] = [
+  { valor: "porcentaje", texto: "% físico" },
+  { valor: "0_100", texto: "0/100" },
+  { valor: "50_50", texto: "50/50" },
+];
+
+/** Regla de medición del avance (AACE 82R-13): cómo el % físico se convierte en valor ganado. */
+function ReglaPartida({ obraId, partidaId, regla, ev }: { obraId: string; partidaId: number; regla: ReglaMedicion; ev: string }) {
+  const cliente = useQueryClient();
+  const cambiar = useMutation({
+    mutationFn: (r: ReglaMedicion) => api(`/api/partidas/${partidaId}/medicion`, "PUT", { regla_medicion: r }),
+    onSuccess: () => {
+      cliente.invalidateQueries({ queryKey: ["indicadores", obraId] });
+      cliente.invalidateQueries({ queryKey: ["obras"] });
+      avisar("Regla de medición cambiada");
+    },
+  });
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <label
+        className="flex items-center gap-2 text-stone-600"
+        title="0/100: se gana al terminar · 50/50: mitad al empezar y mitad al terminar · % físico: según el avance"
+      >
+        Medición
+        <Selector
+          className="min-h-10 w-28 py-1 text-sm"
+          value={regla}
+          disabled={cambiar.isPending}
+          onChange={(e) => cambiar.mutate(e.target.value as ReglaMedicion)}
+        >
+          {REGLAS.map((r) => (
+            <option key={r.valor} value={r.valor}>
+              {r.texto}
+            </option>
+          ))}
+        </Selector>
+      </label>
+      <span className="tabular-nums text-stone-600">EV {ev}</span>
+      <MensajeError error={cambiar.error} />
+    </div>
   );
 }
 

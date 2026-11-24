@@ -167,6 +167,9 @@ ACTIVIDADES = [
      {"ayudante": 48}, [(_m("Materiales de limpieza", "glb", 300), 1)]),
 ]  # fmt: skip
 
+# Regla de medición del avance (82R-13) distinta del % físico.
+REGLAS = {"1.1": "50_50", "6.5": "0_100", "7.6": "50_50", "7.7": "0_100"}
+
 CLASIFICACION = {
     "anteproyecto": "completo",
     "planos_arquitectonicos": "completo",
@@ -252,10 +255,10 @@ def datos() -> pl.ObraLeida:
     )
     for fila, (codigo, fase, nombre, unidad, computo, dur, udur, preds, comunes, propios) in enumerate(ACTIVIDADES, 2):
         predecesoras = [p.strip() for p in preds.split(",") if p.strip()]
+        computo, dur = Decimal(str(computo)), Decimal(str(dur))
+        regla = REGLAS.get(codigo, "porcentaje")
         obra.actividades.append(
-            pl.ActividadLeida(
-                fila, codigo, fase, nombre, unidad, Decimal(str(computo)), Decimal(str(dur)), udur, predecesoras, None
-            )
+            pl.ActividadLeida(fila, codigo, fase, nombre, unidad, computo, dur, udur, predecesoras, None, regla)
         )
         for clave, rendimiento in comunes.items():
             descripcion, u, precio = P[clave]
@@ -288,6 +291,69 @@ def cargar_en(sesion: Session, dueno: Usuario, contenido: bytes) -> Obra:
     return obra
 
 
+NOMBRE_EN_EJECUCION = "Vivienda 120 m² — Urb. Los Mangales (ejemplo en ejecución)"
+SEMANAS_TRANSCURRIDAS = 9
+# Por fase: (ritmo de avance frente al plan, gasto frente a lo ganado). Ritmo < 1 = atrasado; gasto > 1 = sobrecosto.
+ESCENARIO = {
+    "Obras preliminares": (1.0, 0.95),
+    "Movimiento de tierras": (1.0, 1.05),
+    "Fundaciones": (0.95, 1.15),
+    "Obra gruesa": (0.75, 1.06),
+    "Cubierta": (0.6, 1.0),
+    "Instalaciones": (0.7, 1.0),
+    "Acabados": (0.5, 1.0),
+}
+
+
+def cargar_en_ejecucion(sesion: Session, dueno: Usuario, contenido: bytes, hoy: date) -> Obra:
+    """La misma vivienda empezada hace 9 semanas, con avances y gastos: sirve para ver el valor ganado (82R-13) y los
+    pronósticos (80R-13) con números. Fundaciones gastó de más y la obra gruesa va atrasada."""
+    from datetime import timedelta
+
+    from app.calculos import valor_ganado as vg
+    from app.modelos import Avance, Gasto
+
+    lectura = pl.leer_plantilla(contenido)
+    d = lectura.obra
+    d.nombre = NOMBRE_EN_EJECUCION
+    d.cliente = "Sr. Julio Áñez"
+    d.ubicacion = "Urb. Los Mangales, Santa Cruz de la Sierra"
+    d.fecha_inicio = hoy - timedelta(weeks=SEMANAS_TRANSCURRIDAS)
+    obra = ts.crear_obra_desde_plantilla(sesion, dueno, d)
+    base = ts.aprobar_linea_base(sesion, obra, dueno, "Contrato firmado con el cliente.")
+    ayer = hoy - timedelta(days=1)
+    for lp in base.partidas:
+        if lp.partida_id is None or not lp.fecha_inicio or lp.fecha_inicio > ayer or lp.presupuesto <= 0:
+            continue
+        ritmo, gasto = ESCENARIO.get(lp.fase, (1.0, 1.0))
+        plan = vg.fraccion_planificada(lp.fecha_inicio, lp.fecha_fin, ayer)
+        avance = min(Decimal("100"), (plan * Decimal(str(ritmo)) * 100).quantize(Decimal("1")))
+        if avance <= 0:
+            continue
+        sesion.add(Avance(partida_id=lp.partida_id, fecha=ayer, porcentaje=avance, usuario_id=dueno.id))
+        # Gasto repartido en pagos semanales desde el inicio de la partida (lo real, no lo que dice la regla).
+        total = vg.redondear_dinero(lp.presupuesto * avance / 100 * Decimal(str(gasto)))
+        fin = min(ayer, lp.fecha_fin)
+        fechas = [lp.fecha_inicio + timedelta(days=7 * i) for i in range((fin - lp.fecha_inicio).days // 7 + 1)]
+        cuota = vg.redondear_dinero(total / len(fechas))
+        for i, f in enumerate(fechas):
+            monto = total - cuota * (len(fechas) - 1) if i == len(fechas) - 1 else cuota
+            sesion.add(
+                Gasto(
+                    obra_id=obra.id,
+                    partida_id=lp.partida_id,
+                    fecha=f,
+                    monto=monto,
+                    tipo="material" if i % 2 == 0 else "mano_obra",
+                    descripcion=f"{lp.nombre} (pago {i + 1})",
+                    con_factura=i % 2 == 0,
+                    usuario_id=dueno.id,
+                )
+            )
+    sesion.flush()
+    return obra
+
+
 def main() -> None:
     from app import datos_demo
     from app.db import FabricaSesion
@@ -302,10 +368,18 @@ def main() -> None:
         dueno = sesion.scalar(select(Usuario).where(Usuario.correo == datos_demo.CORREO_DEMO))
         if sesion.scalar(select(Obra).where(Obra.dueno_id == dueno.id, Obra.nombre == NOMBRE_OBRA)):
             print("La obra de ejemplo ya está cargada en la cuenta demo.")
-            return
-        obra = cargar_en(sesion, dueno, contenido)
-        sesion.commit()
-        print(f"Obra de ejemplo cargada (id {obra.id}) en {datos_demo.CORREO_DEMO} con la línea base v1 aprobada.")
+        else:
+            obra = cargar_en(sesion, dueno, contenido)
+            sesion.commit()
+            print(f"Obra de ejemplo cargada (id {obra.id}) en {datos_demo.CORREO_DEMO} con la línea base v1 aprobada.")
+        if sesion.scalar(select(Obra).where(Obra.dueno_id == dueno.id, Obra.nombre == NOMBRE_EN_EJECUCION)):
+            print("La obra de ejemplo en ejecución ya está cargada.")
+        else:
+            from app import servicios
+
+            obra = cargar_en_ejecucion(sesion, dueno, contenido, servicios.hoy())
+            sesion.commit()
+            print(f"Obra en ejecución cargada (id {obra.id}) con avances y gastos de {SEMANAS_TRANSCURRIDAS} semanas.")
 
 
 if __name__ == "__main__":

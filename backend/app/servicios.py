@@ -135,6 +135,7 @@ def datos_obra(sesion: Session, obra_id: int) -> list[tuple[Partida, vg.DatosPar
                     avances=avances[p.id],
                     gastos=gastos[p.id],
                     es_generales=p.es_generales,
+                    regla_medicion=p.regla_medicion,
                 ),
             )
         )

@@ -108,6 +108,11 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
         (`tcm/plantilla.py`), exportación (`tcm/exportar.py`), API `rutas/tcm.py`, pestañas Estimado/Base/Línea base
         y página ImportarObra; ejemplo `python -m app.tcm.ejemplo` → `kit/ejemplo/vivienda-120m2.xlsx`; guion
         `kit/prueba-de-uso.md`; 163 tests. Decisión: BAC = precio de venta total del APU.
+  - [x] Fase 2: regla de medición del avance por partida (`Partida.regla_medicion`: % físico, 0/100, 50/50;
+        `vg.fraccion_ganada`; PUT `/partidas/{id}/medicion`; columna J de la plantilla), pronósticos 80R-13
+        (`tcm/pronostico.py`: EAC atípico, BAC/CPI, CPI×SPI, ETC, VAC, TCPI) en `/indicadores`, Resumen con
+        nomenclatura AACE (equivalencias BCWS/BCWP/ACWP), hoja "Valor ganado" con curva PV/EV/AC en el Excel;
+        obra de ejemplo en ejecución (`ejemplo.cargar_en_ejecucion`, 9 semanas, sobrecosto y atraso); 179 tests.
 
 ## Publicación (Render)
 - Blueprint `render.yaml`: servicio web `verdad-contable` (Docker, Starter, Virginia) + Postgres

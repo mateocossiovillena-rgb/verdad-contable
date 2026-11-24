@@ -11,6 +11,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session
 
+from app import servicios
+from app.calculos import valor_ganado as vg
 from app.modelos import LineaBase, Obra
 from app.tcm import clasificacion as cl
 from app.tcm import servicio as ts
@@ -232,6 +234,75 @@ def exportar_estimado(sesion: Session, obra: Obra, base: LineaBase | None) -> by
             grafico.set_categories(Reference(hoja, min_col=1, min_row=2, max_row=len(semanas) + 1))
             hoja.add_chart(grafico, "H2")
 
+    _hoja_valor_ganado(libro, sesion, obra, base)
+
     salida = BytesIO()
     libro.save(salida)
     return salida.getvalue()
+
+
+def _hoja_valor_ganado(libro: Workbook, sesion: Session, obra: Obra, base: LineaBase | None) -> None:
+    """Valor ganado (82R-13) a hoy, pronósticos (80R-13) y curva S con PV, EV y AC."""
+    from app.tcm import pronostico as pr
+
+    hoy = servicios.hoy()
+    datos, resultado = servicios.calcular(sesion, obra, hoy)
+    i = resultado.indicadores
+    hoja = libro.create_sheet("Valor ganado")
+    hoja["A1"], hoja["A1"].font = f"Valor ganado al {hoy:%d/%m/%Y}", TITULO
+    hoja["A2"] = (
+        f"Medido contra la línea base v{base.version}" if base else "Sin línea base aprobada: mide contra el plan"
+    )
+    filas = [
+        ("BAC (presupuesto a la conclusión)", "BAC", i.bac),
+        ("PV (valor planificado)", "BCWS", i.pv),
+        ("EV (valor ganado)", "BCWP", i.ev),
+        ("AC (costo real)", "ACWP", i.ac),
+        ("CV = EV − AC", "", i.cv),
+        ("SV = EV − PV", "", i.sv),
+        ("CPI = EV / AC", "", i.cpi),
+        ("SPI = EV / PV", "", i.spi),
+        ("TCPI = (BAC − EV) / (BAC − AC)", "", pr.tcpi(i)),
+    ]
+    _encabezado(hoja, ["Indicador (AACE 82R-13)", "Equivalencia", "Valor"], [40, 14, 16], 4)
+    for n, (nombre, equivalente, valor) in enumerate(filas, 5):
+        hoja.cell(row=n, column=1, value=nombre)
+        hoja.cell(row=n, column=2, value=equivalente)
+        celda = hoja.cell(row=n, column=3, value=None if valor is None else float(valor))
+        celda.number_format = "0.000" if nombre.split()[0] in ("CPI", "SPI", "TCPI") else DINERO
+    fila = 5 + len(filas) + 1
+    for col, titulo in enumerate(["Pronóstico (AACE 80R-13)", "Fórmula", "EAC", "ETC", "VAC", "Supuesto"], 1):
+        celda = hoja.cell(row=fila, column=col, value=titulo)
+        celda.font, celda.fill = NEGRITA, ENCABEZADO
+    for p in pr.pronosticos(i):
+        fila += 1
+        valores = [p.nombre, p.formula, p.eac, p.etc, p.vac, p.supuesto]
+        for col, valor in enumerate(valores, 1):
+            celda = hoja.cell(
+                row=fila, column=col, value=float(valor) if col in (3, 4, 5) and valor is not None else valor
+            )
+            if col in (3, 4, 5):
+                celda.number_format = DINERO
+    for col, ancho in zip("DEF", (16, 16, 70), strict=True):
+        hoja.column_dimensions[col].width = ancho
+
+    puntos = vg.calcular_curva([d for _, d in datos], servicios.fechas_curva(obra, hoy), hoy)
+    if len(puntos) < 2:
+        return
+    inicio = fila + 3
+    for col, titulo in enumerate(["Fecha", "PV", "EV", "AC"], 1):
+        celda = hoja.cell(row=inicio, column=col, value=titulo)
+        celda.font, celda.fill = NEGRITA, ENCABEZADO
+    for n, pt in enumerate(puntos, inicio + 1):
+        hoja.cell(row=n, column=1, value=pt.fecha).number_format = FECHA
+        for col, valor in ((2, pt.pv), (3, pt.ev), (4, pt.ac)):
+            hoja.cell(row=n, column=col, value=None if valor is None else float(vg.redondear_dinero(valor)))
+            hoja.cell(row=n, column=col).number_format = DINERO
+    ultima = inicio + len(puntos)
+    grafico = LineChart()
+    grafico.title = "Curva S: PV, EV y AC"
+    grafico.y_axis.title = obra.moneda
+    grafico.height, grafico.width = 9, 18
+    grafico.add_data(Reference(hoja, min_col=2, max_col=4, min_row=inicio, max_row=ultima), titles_from_data=True)
+    grafico.set_categories(Reference(hoja, min_col=1, min_row=inicio + 1, max_row=ultima))
+    hoja.add_chart(grafico, f"H{inicio}")
