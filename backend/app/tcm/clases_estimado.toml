@@ -1,0 +1,102 @@
+# Clasificación del estimado — Kit TCM para pymes constructoras
+#
+# Valores iniciales tomados de AACE International RP 56R-08 (clasificación de estimados para
+# edificación y construcción general), que aplica a la construcción el marco genérico de la RP 17R-97.
+# >>> VERIFICAR cada valor contra la norma antes de usarlo en la entrega. <<<
+#
+# Este archivo se puede editar sin tocar el código. Después de editarlo, reiniciar el servidor.
+#
+# SIMPLIFICACIÓN DEL KIT: la norma define la madurez con una matriz de entregables cualitativa.
+# Aquí se resume en un "% de definición" = suma de (peso del entregable × avance del entregable),
+# donde el avance vale 0 (no hay), 0,5 (parcial / preliminar) o 1 (completo).
+
+[avance]
+no = 0.0
+parcial = 0.5
+completo = 1.0
+
+# Entregables del checklist. Los pesos deben sumar 100.
+[[entregables]]
+clave = "anteproyecto"
+nombre = "Anteproyecto (programa de necesidades y esquema)"
+peso = 5
+
+[[entregables]]
+clave = "planos_arquitectonicos"
+nombre = "Planos arquitectónicos"
+peso = 20
+
+[[entregables]]
+clave = "planos_estructurales"
+nombre = "Planos estructurales"
+peso = 20
+
+[[entregables]]
+clave = "especificaciones"
+nombre = "Especificaciones técnicas"
+peso = 15
+
+[[entregables]]
+clave = "computos"
+nombre = "Cómputos métricos"
+peso = 20
+
+[[entregables]]
+clave = "cotizaciones"
+nombre = "Cotizaciones de materiales y subcontratos"
+peso = 10
+
+[[entregables]]
+clave = "cronograma"
+nombre = "Cronograma de obra"
+peso = 10
+
+# Clases. `definicion_norma` es el rango de madurez que indica la norma (los rangos se traslapan).
+# `desde` es el corte que usa el kit para decidir la clase sin ambigüedad: la clase es la de mayor
+# `desde` que no supere el % de definición de la obra. Exactitud: % bajo (negativo) y alto (positivo)
+# sobre el estimado; se muestran los extremos del rango típico de la norma.
+
+[[clases]]
+clase = 5
+desde = 0
+definicion_norma = "0 % a 2 %"
+uso = "Evaluación de la idea o factibilidad preliminar"
+metodologia = "Paramétrica o por analogía: costo por m² de obras parecidas, juicio de experto"
+exactitud_baja = [-20, -30]
+exactitud_alta = [30, 50]
+
+[[clases]]
+clase = 4
+desde = 2
+definicion_norma = "1 % a 15 %"
+uso = "Diseño esquemático, estudio de factibilidad"
+metodologia = "Paramétrica por sistemas o elementos (fundaciones, muros, cubierta) con costos por m² o ml"
+exactitud_baja = [-10, -20]
+exactitud_alta = [20, 30]
+
+[[clases]]
+clase = 3
+desde = 15
+definicion_norma = "10 % a 40 %"
+uso = "Desarrollo del diseño, aprobación del presupuesto"
+metodologia = "Precios unitarios semidetallados por ítem, con cómputos de los ítems principales"
+exactitud_baja = [-5, -10]
+exactitud_alta = [10, 20]
+
+[[clases]]
+clase = 2
+desde = 40
+definicion_norma = "30 % a 75 %"
+uso = "Documentos de construcción, control o licitación"
+metodologia = "Precios unitarios detallados (APU) con cómputos métricos completos"
+exactitud_baja = [-5, -7]
+exactitud_alta = [5, 10]
+
+[[clases]]
+clase = 1
+desde = 75
+definicion_norma = "65 % a 100 %"
+uso = "Oferta o verificación de una oferta"
+metodologia = "APU detallado con cómputos completos y cotizaciones firmes"
+exactitud_baja = [-3, -5]
+exactitud_alta = [3, 5]

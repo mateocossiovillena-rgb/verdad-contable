@@ -394,3 +394,170 @@ export interface Propuesta {
   sugerencias: { oficio: Oficio; nombre: string; dias_menos: number; costo_extra: number }[];
   actividades_actuales: number;
 }
+
+// --- Kit TCM: estimado, clase, base del estimado y línea base ---
+
+export type EstadoEntregable = "no" | "parcial" | "completo";
+
+export interface ParametrosApu {
+  cargas_sociales: number;
+  iva_mano_obra: number;
+  herramientas: number;
+  gastos_generales: number;
+  utilidad: number;
+  impuestos: number;
+}
+
+export interface Apu {
+  materiales: number;
+  mano_obra: number;
+  cargas_sociales: number;
+  iva_mano_obra: number;
+  equipo: number;
+  herramientas: number;
+  costo_directo: number;
+  gastos_generales: number;
+  utilidad: number;
+  impuestos: number;
+  total: number;
+}
+
+export interface InsumoEstimado {
+  tipo: "material" | "mano_obra" | "equipo";
+  descripcion: string;
+  unidad: string;
+  rendimiento: number | null;
+  cantidad: number;
+  precio_unitario: number;
+  parcial: number;
+}
+
+export interface ActividadEstimada {
+  id: number;
+  codigo: string;
+  nombre: string;
+  unidad: string;
+  computo: number | null;
+  fecha_inicio: string;
+  fecha_fin: string;
+  apu: Apu;
+  precio_unitario: number | null;
+  insumos: InsumoEstimado[];
+}
+
+export interface FaseEstimada {
+  id: number;
+  nombre: string;
+  total: number;
+  actividades: ActividadEstimada[];
+}
+
+export interface ClaseEstimado {
+  clase: number;
+  definicion_norma: string;
+  uso: string;
+  metodologia: string;
+  exactitud_baja: number[];
+  exactitud_alta: number[];
+}
+
+export interface Clasificacion {
+  entregables: { clave: string; nombre: string; peso: number; estado: EstadoEntregable }[];
+  porcentaje_definicion: number;
+  clase: ClaseEstimado;
+  minimo: number | null;
+  maximo: number | null;
+  clases: ClaseEstimado[];
+}
+
+export interface BaseEstimado {
+  proposito: string;
+  alcance: string;
+  metodologia: string;
+  base_diseno: string;
+  base_planificacion: string;
+  fuentes_precios: string;
+  fecha_precios: string | null;
+  supuestos: string;
+  exclusiones: string;
+  riesgos_oportunidades: string;
+  contingencia_porcentaje: number;
+  contingencia_nota: string;
+  contingencia_monto: number;
+}
+
+export interface LineaBaseResumen {
+  id: number;
+  version: number;
+  aprobada_en: string;
+  aprobada_por_nombre: string;
+  motivo: string;
+  bac: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  clase: number | null;
+  vigente: boolean;
+}
+
+export interface SemanaPv {
+  numero: number;
+  inicio: string;
+  fin: string;
+  pv: number;
+  pv_acumulado: number;
+  porcentaje_acumulado: number | null;
+}
+
+export interface LineaBaseDetalle extends LineaBaseResumen {
+  partidas: {
+    partida_id: number | null;
+    codigo: string;
+    nombre: string;
+    fase: string;
+    fecha_inicio: string | null;
+    fecha_fin: string | null;
+    presupuesto: number;
+  }[];
+  semanas: SemanaPv[];
+}
+
+export interface EstimadoObra {
+  obra: Obra;
+  parametros: ParametrosApu;
+  fases: FaseEstimada[];
+  totales: Apu;
+  clasificacion: Clasificacion;
+  base: BaseEstimado;
+  lineas_base: LineaBaseResumen[];
+  vigente: LineaBaseDetalle | null;
+  plan_distinto_de_base: boolean;
+}
+
+export interface ProblemaImportacion {
+  hoja: string;
+  fila: number | null;
+  columna: string;
+  mensaje: string;
+}
+
+export interface VistaPrevia {
+  valida: boolean;
+  errores: ProblemaImportacion[];
+  advertencias: ProblemaImportacion[];
+  resumen: {
+    nombre: string;
+    fecha_inicio: string | null;
+    moneda: string;
+    fases: number;
+    actividades: number;
+    insumos: number;
+    total_estimado: number;
+    porcentaje_definicion: number;
+    clase: number;
+  } | null;
+}
+
+export interface ObraImportada {
+  obra: Obra;
+  advertencias: ProblemaImportacion[];
+}

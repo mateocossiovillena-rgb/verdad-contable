@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import config
-from app.rutas import cronograma, estimaciones, obras, registros, sesion
+from app.rutas import cronograma, estimaciones, obras, registros, sesion, tcm
 
 app = FastAPI(title="Verdad Contable", version="0.1.0")
 app.include_router(sesion.rutas)
@@ -13,6 +13,7 @@ app.include_router(obras.rutas)
 app.include_router(registros.rutas)
 app.include_router(cronograma.rutas)
 app.include_router(estimaciones.rutas)
+app.include_router(tcm.rutas)
 
 
 @app.get("/api/salud")

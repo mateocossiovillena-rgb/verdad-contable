@@ -97,6 +97,17 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
   - [x] Publicada en Render con el Blueprint (2026-10-30): https://verdad-contable.onrender.com,
         `/api/salud` responde ok. Ver "Publicación" abajo.
 - [ ] Fase 3: piloto con 2 constructores → docs/piloto.md
+- [ ] Kit TCM (AACE) para pymes — proyecto final de Costos Industriales, rama `kit-tcm` (no publicar en `main` sin
+      decidirlo). Plan: fases 1 estimado + línea base + Excel, 2 EVM AACE (82R-13/80R-13), 3 riesgos (44R-08),
+      4 cambios, 5 kit y prueba de uso.
+  - [x] Fase 1: clase del estimado (`app/tcm/clases_estimado.toml` editable, valores 56R-08 a verificar por el
+        usuario; `tcm/clasificacion.py`), APU con % por obra (`calculos/costos.py`: cargas sociales, IVA m. de obra,
+        herramientas, GG, utilidad, IT; equipo como tipo de recurso), Base del estimado (34R-05), línea base
+        versionada e inmutable (`LineaBase`/`LineaBasePartida`; el EVM mide contra la vigente en
+        `servicios.datos_obra`), PV semanal (`tcm/linea_base.py`), plantilla Excel + importador con vista previa
+        (`tcm/plantilla.py`), exportación (`tcm/exportar.py`), API `rutas/tcm.py`, pestañas Estimado/Base/Línea base
+        y página ImportarObra; ejemplo `python -m app.tcm.ejemplo` → `kit/ejemplo/vivienda-120m2.xlsx`; guion
+        `kit/prueba-de-uso.md`; 163 tests. Decisión: BAC = precio de venta total del APU.
 
 ## Publicación (Render)
 - Blueprint `render.yaml`: servicio web `verdad-contable` (Docker, Starter, Virginia) + Postgres

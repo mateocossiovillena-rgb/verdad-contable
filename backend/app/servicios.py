@@ -25,7 +25,10 @@ from app.modelos import (
     Fase,
     Gasto,
     Hito,
+    LineaBase,
+    LineaBasePartida,
     Obra,
+    ParametrosApu,
     Partida,
     RecursoActividad,
     Usuario,
@@ -86,10 +89,23 @@ def avance_actual_por_partida(sesion: Session, obra_id: int, corte: date) -> dic
     return {p.id: vg.avance_a_la_fecha(d.avances, corte) for p, d in datos}
 
 
+def linea_base_vigente(sesion: Session, obra_id: int) -> LineaBase | None:
+    return sesion.scalar(select(LineaBase).where(LineaBase.obra_id == obra_id, LineaBase.vigente.is_(True)))
+
+
 def datos_obra(sesion: Session, obra_id: int) -> list[tuple[Partida, vg.DatosPartida]]:
-    """Partidas de la obra con su historial de avances y gastos (no anulados)."""
+    """Partidas de la obra con su historial de avances y gastos (no anulados).
+
+    Si la obra tiene una línea base aprobada, el presupuesto (BAC) y las fechas (PV) salen de ella y no del
+    plan editable: así el valor ganado mide contra lo aprobado. Una partida que no estaba en la línea base
+    entra con BAC 0 (su gasto sí suma al AC).
+    """
     obra = sesion.get(Obra, obra_id)
     partidas = partidas_de_obra(sesion, obra_id)
+    base = linea_base_vigente(sesion, obra_id)
+    congeladas: dict[int, LineaBasePartida] | None = None
+    if base is not None:
+        congeladas = {lp.partida_id: lp for lp in base.partidas if lp.partida_id is not None}
     avances: dict[int, list[vg.RegistroAvance]] = defaultdict(list)
     for a in sesion.scalars(
         select(Avance).join(Partida).where(Partida.obra_id == obra_id).order_by(Avance.creado_en, Avance.id)
@@ -98,23 +114,31 @@ def datos_obra(sesion: Session, obra_id: int) -> list[tuple[Partida, vg.DatosPar
     gastos: dict[int, list[vg.RegistroGasto]] = defaultdict(list)
     for g in sesion.scalars(select(Gasto).where(Gasto.obra_id == obra_id, Gasto.anulado.is_(False))):
         gastos[g.partida_id].append(vg.RegistroGasto(g.fecha, g.monto))
-    return [
-        (
-            p,
-            vg.DatosPartida(
-                id=p.id,
-                nombre=p.nombre,
-                presupuesto=p.presupuesto,
-                # Los gastos generales corren durante toda la obra si no tienen fechas propias.
-                fecha_inicio=p.fecha_inicio or (obra.fecha_inicio if p.es_generales else None),
-                fecha_fin=p.fecha_fin or (obra.fecha_fin if p.es_generales else None),
-                avances=avances[p.id],
-                gastos=gastos[p.id],
-                es_generales=p.es_generales,
-            ),
+    salida = []
+    for p in partidas:
+        presupuesto, inicio, fin = p.presupuesto, p.fecha_inicio, p.fecha_fin
+        if congeladas is not None:
+            lp = congeladas.get(p.id)
+            presupuesto = lp.presupuesto if lp else Decimal("0")
+            if lp:
+                inicio, fin = lp.fecha_inicio, lp.fecha_fin
+        salida.append(
+            (
+                p,
+                vg.DatosPartida(
+                    id=p.id,
+                    nombre=p.nombre,
+                    presupuesto=presupuesto,
+                    # Los gastos generales corren durante toda la obra si no tienen fechas propias.
+                    fecha_inicio=inicio or (obra.fecha_inicio if p.es_generales else None),
+                    fecha_fin=fin or (obra.fecha_fin if p.es_generales else None),
+                    avances=avances[p.id],
+                    gastos=gastos[p.id],
+                    es_generales=p.es_generales,
+                ),
+            )
         )
-        for p in partidas
-    ]
+    return salida
 
 
 def fechas_curva(obra: Obra, corte: date) -> list[date]:
@@ -292,6 +316,26 @@ def _recalcular_fechas(obra: Obra, actividades: list[Actividad], sesion: Session
     obra.fecha_fin = max([obra.fecha_inicio] + [f.fin for f in fechas.values()])
 
 
+def parametros_apu(sesion: Session, obra_id: int) -> costos.ParametrosApu:
+    fila = sesion.get(ParametrosApu, obra_id)
+    if fila is None:
+        return costos.ParametrosApu()
+    return costos.ParametrosApu(
+        cargas_sociales=fila.cargas_sociales,
+        iva_mano_obra=fila.iva_mano_obra,
+        herramientas=fila.herramientas,
+        gastos_generales=fila.gastos_generales,
+        utilidad=fila.utilidad,
+        impuestos=fila.impuestos,
+    )
+
+
+def apu_actividad(a: Actividad, parametros: costos.ParametrosApu) -> costos.Apu:
+    return costos.calcular_apu(
+        costos.costo_actividad([datos_recurso(r) for r in a.recursos], a.duracion_dias), parametros
+    )
+
+
 def datos_recurso(r: RecursoActividad) -> costos.DatosRecurso:
     return costos.DatosRecurso(tipo=r.tipo, cantidad=r.cantidad, precio_unitario=r.precio_unitario, por_dia=r.por_dia)
 
@@ -307,7 +351,8 @@ def sincronizar_partidas(sesion: Session, obra: Obra, actividades: list[Activida
     """Cada actividad del cronograma tiene su partida, que es donde caen gastos y avances.
 
     Así "gasté vs. debería" sale del mismo cronograma: la partida toma el nombre, la fase y las fechas de la
-    actividad, y su costo (mano de obra + materiales) como presupuesto. Si la actividad no tiene costos se
+    actividad, y como presupuesto su precio según el APU (costo directo + porcentajes de la obra; sin
+    porcentajes cargados, es el costo de mano de obra + materiales + equipo). Si la actividad no tiene costos se
     conserva el presupuesto que tenía la partida. Si la actividad se borra, su partida se borra también,
     salvo que ya tenga gastos o avances: entonces queda como partida suelta para no perder el historial.
     """
@@ -325,6 +370,7 @@ def sincronizar_partidas(sesion: Session, obra: Obra, actividades: list[Activida
     por_actividad = {p.actividad_id: p for p in vinculadas if p.actividad_id is not None}
     vigentes = {a.id for a in actividades}
 
+    parametros = parametros_apu(sesion, obra.id)
     numero_en_fase: dict[int, int] = defaultdict(int)
     ordenadas = sorted(actividades, key=lambda a: (numero_fase.get(a.fase_id, 0), a.orden, a.id))
     for orden, a in enumerate(ordenadas, 1):
@@ -333,13 +379,13 @@ def sincronizar_partidas(sesion: Session, obra: Obra, actividades: list[Activida
             partida = Partida(obra_id=obra.id, desde_cronograma=True, actividad_id=a.id, presupuesto=Decimal("0"))
             sesion.add(partida)
         numero_en_fase[a.fase_id] += 1
-        partida.codigo = f"{numero_fase.get(a.fase_id, 0)}.{numero_en_fase[a.fase_id]}"
+        partida.codigo = a.codigo or f"{numero_fase.get(a.fase_id, 0)}.{numero_en_fase[a.fase_id]}"
         partida.nombre = a.nombre
         partida.fase = nombre_fase.get(a.fase_id, "")[:80]
         partida.fecha_inicio = a.fecha_inicio
         partida.fecha_fin = a.fecha_fin
         partida.orden = orden
-        costo = costos.costo_actividad([datos_recurso(r) for r in a.recursos], a.duracion_dias).total
+        costo = apu_actividad(a, parametros).total
         if costo > 0:
             partida.presupuesto = costo
 

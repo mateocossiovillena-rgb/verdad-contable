@@ -5,7 +5,20 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    event,
+    inspect,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -193,6 +206,10 @@ class Actividad(Base):
     fecha_inicio: Mapped[date] = mapped_column(Date)
     fecha_fin: Mapped[date] = mapped_column(Date)
     orden: Mapped[int] = mapped_column(Integer, default=0)
+    # Estimado (Kit TCM): código WBS propio (ej. "3.2"), unidad de medida y cómputo métrico de la actividad.
+    codigo: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    unidad: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    computo: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
 
     fase: Mapped[Fase] = relationship(back_populates="actividades")
     predecesoras: Mapped[list[Dependencia]] = relationship(
@@ -215,7 +232,7 @@ class Dependencia(Base):
     desfase_dias: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
-TIPOS_RECURSO = {"mano_obra": "Mano de obra", "material": "Material"}
+TIPOS_RECURSO = {"mano_obra": "Mano de obra", "material": "Material", "equipo": "Equipo"}
 
 
 class RecursoActividad(Base):
@@ -236,6 +253,9 @@ class RecursoActividad(Base):
     precio_unitario: Mapped[Decimal] = mapped_column(DINERO)
     por_dia: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     orden: Mapped[int] = mapped_column(Integer, default=0)
+    # APU: cantidad por unidad de la actividad (ej. 0,25 bolsas de cemento por m²). Si está,
+    # `cantidad` = rendimiento × cómputo de la actividad.
+    rendimiento: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
 
 
 # --- Estimación desde plano (CAD o BIM) ---
@@ -283,3 +303,110 @@ class MapeoCapa(Base):
     dueno_id: Mapped[int] = mapped_column(ForeignKey("usuario.id", ondelete="CASCADE"), index=True)
     capa: Mapped[str] = mapped_column(String(120))  # nombre normalizado (mayúsculas, sin tildes)
     rol: Mapped[str] = mapped_column(String(20))
+
+
+# --- Kit TCM (AACE): estimado, base del estimado y línea base ---
+
+
+class ParametrosApu(Base):
+    """Porcentajes del análisis de precio unitario de una obra (0 a 100). Sin fila = todo en 0."""
+
+    __tablename__ = "parametros_apu"
+
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
+    cargas_sociales: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("0"))
+    iva_mano_obra: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("0"))
+    herramientas: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("0"))
+    gastos_generales: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("0"))
+    utilidad: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("0"))
+    impuestos: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=Decimal("0"))
+
+
+class ClasificacionEstimado(Base):
+    """Checklist de entregables de la obra (clave → "no" | "parcial" | "completo"); la clase se calcula al leer."""
+
+    __tablename__ = "clasificacion_estimado"
+
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
+    entregables: Mapped[dict] = mapped_column(JSON, default=dict)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora, onupdate=ahora)
+
+
+class BaseEstimado(Base):
+    """Base del estimado (AACE 34R-05): documenta cómo se armó el estimado."""
+
+    __tablename__ = "base_estimado"
+
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), primary_key=True)
+    proposito: Mapped[str] = mapped_column(Text, default="")
+    alcance: Mapped[str] = mapped_column(Text, default="")
+    metodologia: Mapped[str] = mapped_column(Text, default="")
+    base_diseno: Mapped[str] = mapped_column(Text, default="")
+    base_planificacion: Mapped[str] = mapped_column(Text, default="")
+    fuentes_precios: Mapped[str] = mapped_column(Text, default="")
+    fecha_precios: Mapped[date | None] = mapped_column(Date)
+    supuestos: Mapped[str] = mapped_column(Text, default="")
+    exclusiones: Mapped[str] = mapped_column(Text, default="")
+    riesgos_oportunidades: Mapped[str] = mapped_column(Text, default="")
+    contingencia_porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
+    contingencia_nota: Mapped[str] = mapped_column(Text, default="")
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora, onupdate=ahora)
+
+
+class LineaBase(Base):
+    """Foto aprobada del presupuesto y las fechas. Nunca se edita ni se borra: un cambio crea otra versión.
+
+    Solo `vigente` puede cambiar (pasa a False cuando se aprueba la versión siguiente).
+    """
+
+    __tablename__ = "linea_base"
+    __table_args__ = (UniqueConstraint("obra_id", "version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    aprobada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
+    aprobada_por: Mapped[int] = mapped_column(ForeignKey("usuario.id"))
+    motivo: Mapped[str] = mapped_column(Text, default="")
+    bac: Mapped[Decimal] = mapped_column(DINERO)
+    fecha_inicio: Mapped[date] = mapped_column(Date)
+    fecha_fin: Mapped[date] = mapped_column(Date)
+    clase: Mapped[int | None] = mapped_column(Integer)
+    vigente: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    partidas: Mapped[list[LineaBasePartida]] = relationship(
+        order_by="LineaBasePartida.orden", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class LineaBasePartida(Base):
+    __tablename__ = "linea_base_partida"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    linea_base_id: Mapped[int] = mapped_column(ForeignKey("linea_base.id", ondelete="CASCADE"), index=True)
+    # Si la partida se borra después, la foto conserva su código, nombre y monto.
+    partida_id: Mapped[int | None] = mapped_column(ForeignKey("partida.id", ondelete="SET NULL"), index=True)
+    codigo: Mapped[str] = mapped_column(String(20), default="")
+    nombre: Mapped[str] = mapped_column(String(160))
+    fase: Mapped[str] = mapped_column(String(80), default="")
+    fecha_inicio: Mapped[date | None] = mapped_column(Date)
+    fecha_fin: Mapped[date | None] = mapped_column(Date)
+    presupuesto: Mapped[Decimal] = mapped_column(DINERO)
+    orden: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class LineaBaseInmutable(Exception):
+    pass
+
+
+@event.listens_for(LineaBasePartida, "before_update")
+def _no_editar_partida_de_linea_base(_mapper, _conexion, objetivo: LineaBasePartida) -> None:
+    raise LineaBaseInmutable("Una línea base aprobada no se puede modificar: aprueba una versión nueva.")
+
+
+@event.listens_for(LineaBase, "before_update")
+def _solo_cambia_vigente(_mapper, _conexion, objetivo: LineaBase) -> None:
+    estado = inspect(objetivo)
+    cambiados = {a.key for a in estado.attrs if a.history.has_changes()} - {"vigente", "partidas"}
+    if cambiados:
+        raise LineaBaseInmutable("Una línea base aprobada no se puede modificar: aprueba una versión nueva.")

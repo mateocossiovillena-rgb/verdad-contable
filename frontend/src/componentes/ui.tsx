@@ -330,7 +330,7 @@ export function Pestanas<T extends string>({
   cambiar: (valor: T) => void;
 }) {
   return (
-    <div className="flex rounded-xl bg-stone-200/70 p-1" role="tablist">
+    <div className="flex overflow-x-auto rounded-xl bg-stone-200/70 p-1" role="tablist">
       {opciones.map((o) => (
         <button
           key={o.valor}
@@ -338,7 +338,7 @@ export function Pestanas<T extends string>({
           role="tab"
           aria-selected={activa === o.valor}
           onClick={() => cambiar(o.valor)}
-          className={`min-h-10 flex-1 rounded-lg px-3 text-sm font-semibold transition ${FOCO} ${
+          className={`min-h-10 flex-1 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition ${FOCO} ${
             activa === o.valor ? "bg-white text-stone-900 shadow-sm" : "text-stone-600 hover:text-stone-900"
           }`}
         >

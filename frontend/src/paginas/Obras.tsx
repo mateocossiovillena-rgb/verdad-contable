@@ -46,10 +46,15 @@ export function MisObras() {
               icono={<IconoObras tamano={32} />}
               texto="Todavía no tienes obras. Crea la primera para empezar."
               accion={
-                <BotonEnlace a="/obras/nueva">
-                  <IconoMas />
-                  Nueva obra
-                </BotonEnlace>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <BotonEnlace a="/obras/nueva">
+                    <IconoMas />
+                    Nueva obra
+                  </BotonEnlace>
+                  <BotonEnlace a="/obras/importar" variante="secundario">
+                    Importar desde Excel
+                  </BotonEnlace>
+                </div>
               }
             />
           ) : (
@@ -61,10 +66,15 @@ export function MisObras() {
         esDueno ? <TarjetaObraDueno key={o.id} obra={o} /> : <TarjetaObraEncargado key={o.id} obra={o} />,
       )}
       {esDueno && obras.data && obras.data.length > 0 && (
-        <BotonEnlace a="/obras/nueva" variante="secundario" className="w-full">
-          <IconoMas />
-          Nueva obra
-        </BotonEnlace>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <BotonEnlace a="/obras/nueva" variante="secundario" className="w-full">
+            <IconoMas />
+            Nueva obra
+          </BotonEnlace>
+          <BotonEnlace a="/obras/importar" variante="secundario" className="w-full">
+            Importar desde Excel (Kit TCM)
+          </BotonEnlace>
+        </div>
       )}
     </Marco>
   );

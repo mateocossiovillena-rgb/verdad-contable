@@ -617,3 +617,205 @@ class PropuestaSalida(BaseModel):
     costo_total: Dinero
     sugerencias: list[SugerenciaSalida]
     actividades_actuales: int = Field(description="Actividades que ya tiene el cronograma de la obra")
+
+
+# --- Kit TCM: estimado, clase, base del estimado y línea base ---
+
+Porcentaje = Annotated[Decimal, Field(ge=0, le=100, max_digits=6, decimal_places=2)]
+EstadoEntregable = Literal["no", "parcial", "completo"]
+
+
+class ParametrosApuEntrada(BaseModel):
+    cargas_sociales: Porcentaje = Decimal("0")
+    iva_mano_obra: Porcentaje = Decimal("0")
+    herramientas: Porcentaje = Decimal("0")
+    gastos_generales: Porcentaje = Decimal("0")
+    utilidad: Porcentaje = Decimal("0")
+    impuestos: Porcentaje = Decimal("0")
+
+
+class ParametrosApuSalida(BaseModel):
+    cargas_sociales: float
+    iva_mano_obra: float
+    herramientas: float
+    gastos_generales: float
+    utilidad: float
+    impuestos: float
+
+
+class ApuSalida(BaseModel):
+    materiales: Dinero
+    mano_obra: Dinero
+    cargas_sociales: Dinero
+    iva_mano_obra: Dinero
+    equipo: Dinero
+    herramientas: Dinero
+    costo_directo: Dinero
+    gastos_generales: Dinero
+    utilidad: Dinero
+    impuestos: Dinero
+    total: Dinero
+
+
+class InsumoSalida(BaseModel):
+    tipo: str
+    descripcion: str
+    unidad: str
+    rendimiento: float | None
+    cantidad: float
+    precio_unitario: Dinero
+    parcial: Dinero
+
+
+class ActividadEstimadaSalida(BaseModel):
+    id: int
+    codigo: str
+    nombre: str
+    unidad: str
+    computo: float | None
+    fecha_inicio: date
+    fecha_fin: date
+    apu: ApuSalida
+    precio_unitario: DineroOpcional
+    insumos: list[InsumoSalida]
+
+
+class FaseEstimadaSalida(BaseModel):
+    id: int
+    nombre: str
+    total: Dinero
+    actividades: list[ActividadEstimadaSalida]
+
+
+class EntregableSalida(BaseModel):
+    clave: str
+    nombre: str
+    peso: float
+    estado: EstadoEntregable
+
+
+class ClaseSalida(BaseModel):
+    clase: int
+    definicion_norma: str
+    uso: str
+    metodologia: str
+    exactitud_baja: list[int]
+    exactitud_alta: list[int]
+
+
+class ClasificacionSalida(BaseModel):
+    entregables: list[EntregableSalida]
+    porcentaje_definicion: float
+    clase: ClaseSalida
+    minimo: DineroOpcional
+    maximo: DineroOpcional
+    clases: list[ClaseSalida]
+
+
+class ClasificacionEntrada(BaseModel):
+    entregables: dict[str, EstadoEntregable]
+
+
+class BaseEstimadoEntrada(BaseModel):
+    proposito: str = Field(default="", max_length=5000)
+    alcance: str = Field(default="", max_length=5000)
+    metodologia: str = Field(default="", max_length=5000)
+    base_diseno: str = Field(default="", max_length=5000)
+    base_planificacion: str = Field(default="", max_length=5000)
+    fuentes_precios: str = Field(default="", max_length=5000)
+    fecha_precios: date | None = None
+    supuestos: str = Field(default="", max_length=5000)
+    exclusiones: str = Field(default="", max_length=5000)
+    riesgos_oportunidades: str = Field(default="", max_length=5000)
+    contingencia_porcentaje: Porcentaje = Decimal("0")
+    contingencia_nota: str = Field(default="", max_length=5000)
+
+
+class BaseEstimadoSalida(BaseEstimadoEntrada, Modelo):
+    contingencia_porcentaje: Dinero
+    contingencia_monto: Dinero = Decimal("0")
+
+
+class LineaBaseEntrada(BaseModel):
+    motivo: str = Field(default="", max_length=2000)
+
+
+class LineaBasePartidaSalida(Modelo):
+    partida_id: int | None
+    codigo: str
+    nombre: str
+    fase: str
+    fecha_inicio: date | None
+    fecha_fin: date | None
+    presupuesto: Dinero
+
+
+class SemanaSalida(BaseModel):
+    numero: int
+    inicio: date
+    fin: date
+    pv: Dinero
+    pv_acumulado: Dinero
+    porcentaje_acumulado: float | None
+
+
+class LineaBaseResumen(Modelo):
+    id: int
+    version: int
+    aprobada_en: datetime
+    aprobada_por_nombre: str = ""
+    motivo: str
+    bac: Dinero
+    fecha_inicio: date
+    fecha_fin: date
+    clase: int | None
+    vigente: bool
+
+
+class LineaBaseDetalle(LineaBaseResumen):
+    partidas: list[LineaBasePartidaSalida]
+    semanas: list[SemanaSalida]
+
+
+class EstimadoObra(BaseModel):
+    obra: ObraSalida
+    parametros: ParametrosApuSalida
+    fases: list[FaseEstimadaSalida]
+    totales: ApuSalida
+    clasificacion: ClasificacionSalida
+    base: BaseEstimadoSalida
+    lineas_base: list[LineaBaseResumen]
+    vigente: LineaBaseDetalle | None
+    # True si el plan cambió desde la línea base vigente (otro BAC o fechas): hay que aprobar una nueva.
+    plan_distinto_de_base: bool = False
+
+
+class ProblemaSalida(BaseModel):
+    hoja: str
+    fila: int | None
+    columna: str
+    mensaje: str
+
+
+class ResumenImportacion(BaseModel):
+    nombre: str
+    fecha_inicio: date | None
+    moneda: str
+    fases: int
+    actividades: int
+    insumos: int
+    total_estimado: Dinero
+    porcentaje_definicion: float
+    clase: int
+
+
+class VistaPrevia(BaseModel):
+    valida: bool
+    errores: list[ProblemaSalida]
+    advertencias: list[ProblemaSalida]
+    resumen: ResumenImportacion | None
+
+
+class ObraImportada(BaseModel):
+    obra: ObraSalida
+    advertencias: list[ProblemaSalida]

@@ -37,6 +37,7 @@ import {
   type Tono,
 } from "../componentes/ui";
 import { useIndicadores } from "./Partidas";
+import { VistaBase, VistaEstimado, VistaLineaBase } from "./EstimadoObra";
 
 const FASES_SUGERIDAS = ["Obra gruesa", "Instalaciones", "Acabados"];
 
@@ -61,13 +62,15 @@ function useCambio(obraId: string | undefined) {
   });
 }
 
-type Vista = "resumen" | "cronograma";
+type Vista = "resumen" | "cronograma" | "estimado" | "base" | "linea-base";
+const VISTAS: Vista[] = ["resumen", "cronograma", "estimado", "base", "linea-base"];
 
 /** Página de la obra: resumen de valor ganado y cronograma con fases y actividades. */
 export function DetalleObra() {
   const { obraId } = useParams();
   const [parametros, setParametros] = useSearchParams();
-  const vista: Vista = parametros.get("vista") === "cronograma" ? "cronograma" : "resumen";
+  const pedida = parametros.get("vista") as Vista | null;
+  const vista: Vista = pedida && VISTAS.includes(pedida) ? pedida : "resumen";
   const cronograma = useCronograma(obraId);
   const c = cronograma.data;
 
@@ -91,12 +94,21 @@ export function DetalleObra() {
         opciones={[
           { valor: "resumen", texto: "Resumen" },
           { valor: "cronograma", texto: "Cronograma" },
+          { valor: "estimado", texto: "Estimado" },
+          { valor: "base", texto: "Base" },
+          { valor: "linea-base", texto: "Línea base" },
         ]}
         activa={vista}
         cambiar={(v) => setParametros(v === "resumen" ? {} : { vista: v }, { replace: true })}
       />
       {vista === "resumen" ? (
         <Resumen obraId={obraId!} />
+      ) : vista === "estimado" ? (
+        <VistaEstimado obraId={obraId!} />
+      ) : vista === "base" ? (
+        <VistaBase obraId={obraId!} />
+      ) : vista === "linea-base" ? (
+        <VistaLineaBase obraId={obraId!} />
       ) : (
         <>
           {cronograma.isLoading && <Cargando />}

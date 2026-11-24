@@ -15,6 +15,7 @@ import { Alertas } from "./paginas/Alertas";
 import { Cuenta } from "./paginas/Cuenta";
 import { EstimarObra } from "./paginas/EstimarObra";
 import { Equipo } from "./paginas/Equipo";
+import { ImportarObra } from "./paginas/ImportarObra";
 
 const cliente = new QueryClient({
   defaultOptions: {
@@ -57,6 +58,7 @@ export function App() {
             <Route path="/cuenta" element={<ConSesion><Cuenta /></ConSesion>} />
 
             <Route path="/obras/nueva" element={<SoloDueno><FormObra /></SoloDueno>} />
+            <Route path="/obras/importar" element={<SoloDueno><ImportarObra /></SoloDueno>} />
             <Route path="/obras/:obraId" element={<SoloDueno><DetalleObra /></SoloDueno>} />
             <Route path="/obras/:obraId/editar" element={<SoloDueno><FormObra /></SoloDueno>} />
             <Route path="/obras/:obraId/partidas" element={<SoloDueno><Partidas /></SoloDueno>} />
