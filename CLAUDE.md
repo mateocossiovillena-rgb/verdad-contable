@@ -113,6 +113,10 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
         (`tcm/pronostico.py`: EAC atípico, BAC/CPI, CPI×SPI, ETC, VAC, TCPI) en `/indicadores`, Resumen con
         nomenclatura AACE (equivalencias BCWS/BCWP/ACWP), hoja "Valor ganado" con curva PV/EV/AC en el Excel;
         obra de ejemplo en ejecución (`ejemplo.cargar_en_ejecucion`, 9 semanas, sobrecosto y atraso); 179 tests.
+  - [x] Fase 3: registro de riesgos 44R-08 (`Riesgo`, `tcm/riesgos.py`: valor esperado P × I, días esperados, nivel
+        por matriz 3×3, resumen de abiertos); API `/obras/{id}/riesgos`, `/riesgos/{id}`, POST
+        `/obras/{id}/riesgos/contingencia` (copia Σ P × I a la Base del estimado); pestaña Riesgos; 6 riesgos de
+        ejemplo; 192 tests. Importar/exportar riesgos por Excel queda para la fase 4.
 
 ## Publicación (Render)
 - Blueprint `render.yaml`: servicio web `verdad-contable` (Docker, Starter, Virginia) + Postgres

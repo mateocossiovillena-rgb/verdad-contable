@@ -240,6 +240,46 @@ BASE = {
 }
 
 
+# Registro de riesgos (44R-08): (descripción, causa, probabilidad %, impacto Bs, impacto días, responsable,
+# estrategia, respuesta).
+RIESGOS = [
+    ("Suba del precio del fierro y del cemento", "Escasez de dólares e importación irregular", 40, 6500, 0,
+     "Dueño", "mitigar", "Comprar todo el fierro de fundaciones y estructura al iniciar la obra."),
+    ("Lluvias intensas en enero–marzo", "Temporada de lluvias en Santa Cruz", 60, 8000, 12,
+     "Residente de obra", "mitigar", "Cubrir excavaciones, terminar la cubierta antes de marzo y prever bombeo."),
+    ("Cuantías de fierro mayores a las estimadas", "Planos estructurales todavía preliminares", 50, 9000, 0,
+     "Ingeniero calculista", "evitar", "Cerrar el cálculo estructural antes de empezar las fundaciones."),
+    ("Suelo con baja capacidad portante", "No hay estudio de suelos", 15, 25000, 15,
+     "Ingeniero calculista", "evitar", "Hacer un estudio de suelos (SPT) antes de diseñar las fundaciones."),
+    ("Falta de albañiles en temporada alta", "Varias obras grandes en la zona", 30, 4000, 10,
+     "Dueño", "aceptar", "Acordar con la cuadrilla de confianza desde la firma del contrato."),
+    ("Robo de materiales en obra", "Obra sin cerco y sin cuidador nocturno", 20, 3000, 2,
+     "Encargado de obra", "mitigar", "Cerco provisional y cuidador; comprar materiales por etapas."),
+]  # fmt: skip
+
+
+def cargar_riesgos(sesion: Session, obra: Obra) -> None:
+    from app.modelos import Riesgo
+
+    for numero, (desc, causa, prob, costo, dias, resp, estrategia, respuesta) in enumerate(RIESGOS, 1):
+        sesion.add(
+            Riesgo(
+                obra_id=obra.id,
+                numero=numero,
+                descripcion=desc,
+                causa=causa,
+                probabilidad=Decimal(prob),
+                impacto_costo=Decimal(costo),
+                impacto_dias=dias,
+                responsable=resp,
+                estrategia=estrategia,
+                respuesta=respuesta,
+                estado="abierto",
+            )
+        )
+    sesion.flush()
+
+
 def datos() -> pl.ObraLeida:
     obra = pl.ObraLeida(
         nombre=NOMBRE_OBRA,
@@ -288,6 +328,7 @@ def cargar_en(sesion: Session, dueno: Usuario, contenido: bytes) -> Obra:
         raise ValueError(f"El ejemplo no pasa la validación: {detalle}")
     obra = ts.crear_obra_desde_plantilla(sesion, dueno, lectura.obra)
     ts.aprobar_linea_base(sesion, obra, dueno, "Línea base inicial: estimado aprobado por el cliente.")
+    cargar_riesgos(sesion, obra)
     return obra
 
 
@@ -321,6 +362,7 @@ def cargar_en_ejecucion(sesion: Session, dueno: Usuario, contenido: bytes, hoy: 
     d.fecha_inicio = hoy - timedelta(weeks=SEMANAS_TRANSCURRIDAS)
     obra = ts.crear_obra_desde_plantilla(sesion, dueno, d)
     base = ts.aprobar_linea_base(sesion, obra, dueno, "Contrato firmado con el cliente.")
+    cargar_riesgos(sesion, obra)
     ayer = hoy - timedelta(days=1)
     for lp in base.partidas:
         if lp.partida_id is None or not lp.fecha_inicio or lp.fecha_inicio > ayer or lp.presupuesto <= 0:

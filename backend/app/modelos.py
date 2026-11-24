@@ -412,3 +412,25 @@ def _solo_cambia_vigente(_mapper, _conexion, objetivo: LineaBase) -> None:
     cambiados = {a.key for a in estado.attrs if a.history.has_changes()} - {"vigente", "partidas"}
     if cambiados:
         raise LineaBaseInmutable("Una línea base aprobada no se puede modificar: aprueba una versión nueva.")
+
+
+class Riesgo(Base):
+    """Registro de riesgos de la obra (AACE 44R-08). El valor esperado P × I se calcula al leer."""
+
+    __tablename__ = "riesgo"
+    __table_args__ = (UniqueConstraint("obra_id", "numero"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    numero: Mapped[int] = mapped_column(Integer)  # se muestra como R-01, R-02…
+    descripcion: Mapped[str] = mapped_column(String(300))
+    causa: Mapped[str] = mapped_column(Text, default="")
+    probabilidad: Mapped[Decimal] = mapped_column(Numeric(5, 2))  # 0 a 100 %
+    impacto_costo: Mapped[Decimal] = mapped_column(DINERO, default=Decimal("0"))
+    impacto_dias: Mapped[int] = mapped_column(Integer, default=0)
+    responsable: Mapped[str] = mapped_column(String(120), default="")
+    estrategia: Mapped[str] = mapped_column(String(12), default="mitigar")
+    respuesta: Mapped[str] = mapped_column(Text, default="")
+    estado: Mapped[str] = mapped_column(String(10), default="abierto")
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora, onupdate=ahora)

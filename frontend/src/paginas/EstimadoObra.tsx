@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, descargar } from "../api";
 import { dinero, fecha, fechaCorta, hoyISO, leerMonto } from "../formato";
 import type { ActividadEstimada, BaseEstimado, EstadoEntregable, EstimadoObra, ParametrosApu, SemanaPv } from "../tipos";
+import { BotonContingencia } from "./RiesgosObra";
 import {
   AreaTexto,
   Boton,
@@ -464,6 +465,21 @@ function FormBase({ obraId, e }: { obraId: string; e: EstimadoObra }) {
             <Entrada inputMode="decimal" className="text-right tabular-nums" value={contingencia} onChange={(ev) => setContingencia(ev.target.value)} />
           </Campo>
           <Metrica etiqueta="Monto de contingencia (guardado)" valor={dinero(e.base.contingencia_monto, e.obra.moneda)} />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-stone-50 p-3">
+          <div className="min-w-0 flex-1 basis-60 text-sm text-stone-700">
+            {e.riesgos_abiertos > 0 ? (
+              <>
+                El registro de riesgos (44R-08) sugiere{" "}
+                <span className="font-semibold tabular-nums text-stone-900">{dinero(e.riesgos_valor_esperado, e.obra.moneda)}</span>
+                {e.riesgos_porcentaje !== null && <span className="tabular-nums"> ({e.riesgos_porcentaje.toLocaleString("es-BO")} %)</span>}: la suma
+                de P × I de sus {e.riesgos_abiertos} riesgos abiertos.
+              </>
+            ) : (
+              "Carga riesgos en la pestaña Riesgos para que el registro sugiera la contingencia (suma de P × I)."
+            )}
+          </div>
+          {e.riesgos_abiertos > 0 && <BotonContingencia obraId={obraId} />}
         </div>
         <Campo etiqueta={CAMPOS_BASE[9].texto} ayuda={CAMPOS_BASE[9].ayuda}>
           <AreaTexto rows={2} value={b.contingencia_nota} onChange={(ev) => setB({ ...b, contingencia_nota: ev.target.value })} />

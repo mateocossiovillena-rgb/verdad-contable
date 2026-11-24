@@ -5,11 +5,12 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import servicios
 from app.calculos import costos
+from app.calculos import valor_ganado as vg
 from app.db import obtener_sesion
 from app.esquemas import (
     ActividadEstimadaSalida,
@@ -31,15 +32,19 @@ from app.esquemas import (
     ParametrosApuEntrada,
     ParametrosApuSalida,
     ProblemaSalida,
+    RegistroRiesgos,
     ResumenImportacion,
+    RiesgoEntrada,
+    RiesgoSalida,
     SemanaSalida,
     VistaPrevia,
 )
-from app.modelos import BaseEstimado, LineaBase, Obra, ParametrosApu, Usuario
+from app.modelos import BaseEstimado, LineaBase, Obra, ParametrosApu, Riesgo, Usuario
 from app.seguridad import obra_propia, solo_dueno
 from app.tcm import clasificacion as cl
 from app.tcm import exportar
 from app.tcm import plantilla as pl
+from app.tcm import riesgos as rg
 from app.tcm import servicio as ts
 
 rutas = APIRouter(prefix="/api", tags=["kit TCM"])
@@ -190,7 +195,17 @@ def _estimado_obra(sesion: Session, obra: Obra) -> EstimadoObra:
         lineas_base=[_resumen(lb, nombres) for lb in lineas],
         vigente=_detalle(sesion, vigente) if vigente else None,
         plan_distinto_de_base=plan_distinto,
+        **_campos_contingencia(sesion, obra, est.total),
     )
+
+
+def _campos_contingencia(sesion: Session, obra: Obra, total: Decimal) -> dict:
+    r = rg.resumir([_datos_riesgo(x) for x in _riesgos(sesion, obra.id)], total)
+    return {
+        "riesgos_abiertos": r.abiertos,
+        "riesgos_valor_esperado": r.valor_esperado,
+        "riesgos_porcentaje": None if r.porcentaje_del_estimado is None else float(r.porcentaje_del_estimado),
+    }
 
 
 # --- Plantilla e importación ---
@@ -358,3 +373,125 @@ def exportar_estimado(obra_id: int, dueno: Usuario = Depends(solo_dueno), sesion
     obra = obra_propia(sesion, dueno, obra_id)
     contenido = exportar.exportar_estimado(sesion, obra, servicios.linea_base_vigente(sesion, obra.id))
     return _excel(contenido, f"estimado-obra-{obra.id}-{date.today().isoformat()}.xlsx")
+
+
+# --- Registro de riesgos (AACE 44R-08) ---
+
+
+def _riesgos(sesion: Session, obra_id: int) -> list[Riesgo]:
+    return list(sesion.scalars(select(Riesgo).where(Riesgo.obra_id == obra_id).order_by(Riesgo.numero)))
+
+
+def _datos_riesgo(r: Riesgo) -> rg.DatosRiesgo:
+    return rg.DatosRiesgo(r.probabilidad, r.impacto_costo, r.impacto_dias, r.estado)
+
+
+def _registro(sesion: Session, obra: Obra) -> RegistroRiesgos:
+    total = ts.estimado(sesion, obra).total
+    riesgos = _riesgos(sesion, obra.id)
+    resumen = rg.resumir([_datos_riesgo(r) for r in riesgos], total)
+    salida = []
+    for r in riesgos:
+        d = _datos_riesgo(r)
+        salida.append(
+            RiesgoSalida.model_validate(r).model_copy(
+                update={
+                    "codigo": f"R-{r.numero:02d}",
+                    "valor_esperado": rg.valor_esperado(d),
+                    "dias_esperados": float(rg.dias_esperados(d)),
+                    "nivel": rg.nivel(d, total),
+                }
+            )
+        )
+    return RegistroRiesgos(
+        moneda=obra.moneda,
+        total_estimado=total,
+        riesgos=salida,
+        abiertos=resumen.abiertos,
+        valor_esperado=resumen.valor_esperado,
+        dias_esperados=float(resumen.dias_esperados),
+        porcentaje_del_estimado=None
+        if resumen.porcentaje_del_estimado is None
+        else float(resumen.porcentaje_del_estimado),
+        contingencia_actual_porcentaje=float(ts.base_del_estimado(sesion, obra.id).contingencia_porcentaje),
+    )
+
+
+def _riesgo_propio(sesion: Session, dueno: Usuario, riesgo_id: int) -> tuple[Riesgo, Obra]:
+    riesgo = sesion.get(Riesgo, riesgo_id)
+    if riesgo is None:
+        raise HTTPException(404, "Riesgo no encontrado")
+    return riesgo, obra_propia(sesion, dueno, riesgo.obra_id)
+
+
+@rutas.get("/obras/{obra_id}/riesgos", response_model=RegistroRiesgos)
+def ver_riesgos(obra_id: int, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)):
+    return _registro(sesion, obra_propia(sesion, dueno, obra_id))
+
+
+@rutas.post("/obras/{obra_id}/riesgos", response_model=RegistroRiesgos, status_code=status.HTTP_201_CREATED)
+def crear_riesgo(
+    obra_id: int, datos: RiesgoEntrada, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)
+):
+    obra = obra_propia(sesion, dueno, obra_id)
+    numero = (sesion.scalar(select(func.max(Riesgo.numero)).where(Riesgo.obra_id == obra.id)) or 0) + 1
+    sesion.add(Riesgo(obra_id=obra.id, numero=numero, **_limpio(datos)))
+    sesion.commit()
+    return _registro(sesion, obra)
+
+
+def _limpio(datos: RiesgoEntrada) -> dict:
+    return {k: v.strip() if isinstance(v, str) else v for k, v in datos.model_dump().items()}
+
+
+@rutas.put("/riesgos/{riesgo_id}", response_model=RegistroRiesgos)
+def editar_riesgo(
+    riesgo_id: int,
+    datos: RiesgoEntrada,
+    dueno: Usuario = Depends(solo_dueno),
+    sesion: Session = Depends(obtener_sesion),
+):
+    riesgo, obra = _riesgo_propio(sesion, dueno, riesgo_id)
+    for campo, valor in _limpio(datos).items():
+        setattr(riesgo, campo, valor)
+    sesion.commit()
+    return _registro(sesion, obra)
+
+
+@rutas.delete("/riesgos/{riesgo_id}", response_model=RegistroRiesgos)
+def borrar_riesgo(riesgo_id: int, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)):
+    """Para errores de carga. Un riesgo que ya no aplica se marca "cerrado" para conservar el historial."""
+    riesgo, obra = _riesgo_propio(sesion, dueno, riesgo_id)
+    sesion.delete(riesgo)
+    sesion.commit()
+    return _registro(sesion, obra)
+
+
+@rutas.post("/obras/{obra_id}/riesgos/contingencia", response_model=EstimadoObra)
+def usar_como_contingencia(
+    obra_id: int, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)
+):
+    """Pone en la Base del estimado la contingencia que sugiere el registro de riesgos (suma P × I de los abiertos)."""
+    obra = obra_propia(sesion, dueno, obra_id)
+    total = ts.estimado(sesion, obra).total
+    resumen = rg.resumir([_datos_riesgo(r) for r in _riesgos(sesion, obra.id)], total)
+    if resumen.porcentaje_del_estimado is None:
+        raise HTTPException(422, "La obra no tiene estimado: no se puede expresar la contingencia como porcentaje.")
+    if resumen.porcentaje_del_estimado > 100:
+        raise HTTPException(422, "Los riesgos abiertos suman más que el estimado: revisa los impactos cargados.")
+    fila = sesion.get(BaseEstimado, obra.id)
+    if fila is None:
+        fila = BaseEstimado(obra_id=obra.id)
+        sesion.add(fila)
+        for campo in ts.CAMPOS_BASE:
+            setattr(fila, campo, "")
+    fila.contingencia_porcentaje = resumen.porcentaje_del_estimado
+    monto = vg.formatear_bs(resumen.valor_esperado).replace("Bs", obra.moneda)
+    porcentaje = str(resumen.porcentaje_del_estimado).replace(".", ",")
+    cuantos = "el riesgo abierto" if resumen.abiertos == 1 else f"los {resumen.abiertos} riesgos abiertos"
+    fila.contingencia_nota = (
+        f"Suma de los valores esperados (P × I) de {cuantos} del registro de riesgos "
+        f"(AACE 44R-08): {monto}, el {porcentaje} % del estimado. Calculada el {servicios.hoy():%d/%m/%Y}."
+    )
+    sesion.commit()
+    return _estimado_obra(sesion, obra)

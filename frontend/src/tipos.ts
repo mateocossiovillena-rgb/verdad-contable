@@ -548,6 +548,9 @@ export interface EstimadoObra {
   lineas_base: LineaBaseResumen[];
   vigente: LineaBaseDetalle | null;
   plan_distinto_de_base: boolean;
+  riesgos_abiertos: number;
+  riesgos_valor_esperado: number;
+  riesgos_porcentaje: number | null;
 }
 
 export interface ProblemaImportacion {
@@ -577,4 +580,38 @@ export interface VistaPrevia {
 export interface ObraImportada {
   obra: Obra;
   advertencias: ProblemaImportacion[];
+}
+
+// --- Kit TCM: registro de riesgos (AACE 44R-08) ---
+
+export type EstadoRiesgo = "abierto" | "ocurrido" | "cerrado";
+export type EstrategiaRiesgo = "evitar" | "mitigar" | "transferir" | "aceptar";
+
+export interface Riesgo {
+  id: number;
+  numero: number;
+  codigo: string;
+  descripcion: string;
+  causa: string;
+  probabilidad: number;
+  impacto_costo: number;
+  impacto_dias: number;
+  responsable: string;
+  estrategia: EstrategiaRiesgo;
+  respuesta: string;
+  estado: EstadoRiesgo;
+  valor_esperado: number;
+  dias_esperados: number;
+  nivel: "bajo" | "medio" | "alto";
+}
+
+export interface RegistroRiesgos {
+  moneda: string;
+  total_estimado: number;
+  riesgos: Riesgo[];
+  abiertos: number;
+  valor_esperado: number;
+  dias_esperados: number;
+  porcentaje_del_estimado: number | null;
+  contingencia_actual_porcentaje: number;
 }

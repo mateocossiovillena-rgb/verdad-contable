@@ -810,6 +810,10 @@ class EstimadoObra(BaseModel):
     vigente: LineaBaseDetalle | None
     # True si el plan cambió desde la línea base vigente (otro BAC o fechas): hay que aprobar una nueva.
     plan_distinto_de_base: bool = False
+    # Contingencia sugerida por el registro de riesgos (suma P × I de los abiertos).
+    riesgos_abiertos: int = 0
+    riesgos_valor_esperado: Dinero = Decimal("0")
+    riesgos_porcentaje: float | None = None
 
 
 class ProblemaSalida(BaseModel):
@@ -841,3 +845,50 @@ class VistaPrevia(BaseModel):
 class ObraImportada(BaseModel):
     obra: ObraSalida
     advertencias: list[ProblemaSalida]
+
+
+# --- Kit TCM: registro de riesgos (AACE 44R-08) ---
+
+EstadoRiesgo = Literal["abierto", "ocurrido", "cerrado"]
+EstrategiaRiesgo = Literal["evitar", "mitigar", "transferir", "aceptar"]
+
+
+class RiesgoEntrada(BaseModel):
+    descripcion: str = Field(min_length=3, max_length=300)
+    causa: str = Field(default="", max_length=2000)
+    probabilidad: Porcentaje
+    impacto_costo: MontoEntrada = Decimal("0")
+    impacto_dias: int = Field(default=0, ge=0, le=3650)
+    responsable: str = Field(default="", max_length=120)
+    estrategia: EstrategiaRiesgo = "mitigar"
+    respuesta: str = Field(default="", max_length=2000)
+    estado: EstadoRiesgo = "abierto"
+
+
+class RiesgoSalida(Modelo):
+    id: int
+    numero: int
+    codigo: str = ""
+    descripcion: str
+    causa: str
+    probabilidad: float
+    impacto_costo: Dinero
+    impacto_dias: int
+    responsable: str
+    estrategia: str
+    respuesta: str
+    estado: str
+    valor_esperado: Dinero = Decimal("0")
+    dias_esperados: float = 0
+    nivel: str = "medio"
+
+
+class RegistroRiesgos(BaseModel):
+    moneda: str
+    total_estimado: Dinero
+    riesgos: list[RiesgoSalida]
+    abiertos: int
+    valor_esperado: Dinero = Field(description="Suma P × I de los riesgos abiertos: contingencia sugerida")
+    dias_esperados: float
+    porcentaje_del_estimado: float | None
+    contingencia_actual_porcentaje: float

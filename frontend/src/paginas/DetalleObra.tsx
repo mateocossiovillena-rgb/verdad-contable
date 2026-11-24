@@ -38,6 +38,7 @@ import {
 } from "../componentes/ui";
 import { useIndicadores } from "./Partidas";
 import { VistaBase, VistaEstimado, VistaLineaBase } from "./EstimadoObra";
+import { VistaRiesgos } from "./RiesgosObra";
 
 const FASES_SUGERIDAS = ["Obra gruesa", "Instalaciones", "Acabados"];
 
@@ -62,8 +63,8 @@ function useCambio(obraId: string | undefined) {
   });
 }
 
-type Vista = "resumen" | "cronograma" | "estimado" | "base" | "linea-base";
-const VISTAS: Vista[] = ["resumen", "cronograma", "estimado", "base", "linea-base"];
+type Vista = "resumen" | "cronograma" | "estimado" | "base" | "linea-base" | "riesgos";
+const VISTAS: Vista[] = ["resumen", "cronograma", "estimado", "base", "linea-base", "riesgos"];
 
 /** Página de la obra: resumen de valor ganado y cronograma con fases y actividades. */
 export function DetalleObra() {
@@ -97,6 +98,7 @@ export function DetalleObra() {
           { valor: "estimado", texto: "Estimado" },
           { valor: "base", texto: "Base" },
           { valor: "linea-base", texto: "Línea base" },
+          { valor: "riesgos", texto: "Riesgos" },
         ]}
         activa={vista}
         cambiar={(v) => setParametros(v === "resumen" ? {} : { vista: v }, { replace: true })}
@@ -109,6 +111,8 @@ export function DetalleObra() {
         <VistaBase obraId={obraId!} />
       ) : vista === "linea-base" ? (
         <VistaLineaBase obraId={obraId!} />
+      ) : vista === "riesgos" ? (
+        <VistaRiesgos obraId={obraId!} />
       ) : (
         <>
           {cronograma.isLoading && <Cargando />}
