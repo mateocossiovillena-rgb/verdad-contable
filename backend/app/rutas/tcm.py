@@ -17,6 +17,9 @@ from app.esquemas import (
     ApuSalida,
     BaseEstimadoEntrada,
     BaseEstimadoSalida,
+    BitacoraCambios,
+    CambioEntrada,
+    CambioSalida,
     ClaseSalida,
     ClasificacionEntrada,
     ClasificacionSalida,
@@ -33,17 +36,21 @@ from app.esquemas import (
     ParametrosApuSalida,
     ProblemaSalida,
     RegistroRiesgos,
+    RegistrosImportados,
+    ResolucionCambio,
     ResumenImportacion,
     RiesgoEntrada,
     RiesgoSalida,
     SemanaSalida,
     VistaPrevia,
+    VistaPreviaRegistros,
 )
-from app.modelos import BaseEstimado, LineaBase, Obra, ParametrosApu, Riesgo, Usuario
+from app.modelos import BaseEstimado, Cambio, LineaBase, Obra, ParametrosApu, Riesgo, Usuario
 from app.seguridad import obra_propia, solo_dueno
 from app.tcm import clasificacion as cl
 from app.tcm import exportar
 from app.tcm import plantilla as pl
+from app.tcm import registros_excel as rx
 from app.tcm import riesgos as rg
 from app.tcm import servicio as ts
 
@@ -90,14 +97,17 @@ def _nombres_usuarios(sesion: Session, ids: set[int]) -> dict[int, str]:
     return dict(sesion.execute(select(Usuario.id, Usuario.nombre).where(Usuario.id.in_(ids))).all())
 
 
-def _resumen(base: LineaBase, nombres: dict[int, str]) -> LineaBaseResumen:
+def _resumen(base: LineaBase, nombres: dict[int, str], sesion: Session | None = None) -> LineaBaseResumen:
+    codigo = None
+    if base.cambio_id and sesion is not None and (c := sesion.get(Cambio, base.cambio_id)) is not None:
+        codigo = ts.codigo_cambio(c)
     return LineaBaseResumen.model_validate(base).model_copy(
-        update={"aprobada_por_nombre": nombres.get(base.aprobada_por, "")}
+        update={"aprobada_por_nombre": nombres.get(base.aprobada_por, ""), "cambio_codigo": codigo}
     )
 
 
 def _detalle(sesion: Session, base: LineaBase) -> LineaBaseDetalle:
-    resumen = _resumen(base, _nombres_usuarios(sesion, {base.aprobada_por}))
+    resumen = _resumen(base, _nombres_usuarios(sesion, {base.aprobada_por}), sesion)
     return LineaBaseDetalle(
         **resumen.model_dump(),
         partidas=base.partidas,
@@ -192,7 +202,7 @@ def _estimado_obra(sesion: Session, obra: Obra) -> EstimadoObra:
         base=BaseEstimadoSalida.model_validate(base).model_copy(
             update={"contingencia_monto": (est.total * base.contingencia_porcentaje / 100).quantize(Decimal("0.01"))}
         ),
-        lineas_base=[_resumen(lb, nombres) for lb in lineas],
+        lineas_base=[_resumen(lb, nombres, sesion) for lb in lineas],
         vigente=_detalle(sesion, vigente) if vigente else None,
         plan_distinto_de_base=plan_distinto,
         **_campos_contingencia(sesion, obra, est.total),
@@ -371,7 +381,12 @@ def ver_linea_base(linea_base_id: int, dueno: Usuario = Depends(solo_dueno), ses
 @rutas.get("/obras/{obra_id}/estimado.xlsx")
 def exportar_estimado(obra_id: int, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)):
     obra = obra_propia(sesion, dueno, obra_id)
-    contenido = exportar.exportar_estimado(sesion, obra, servicios.linea_base_vigente(sesion, obra.id))
+    contenido = exportar.exportar_estimado(
+        sesion,
+        obra,
+        servicios.linea_base_vigente(sesion, obra.id),
+        registros=(_riesgos(sesion, obra.id), _cambios(sesion, obra.id), _versiones_por_cambio(sesion, obra.id)),
+    )
     return _excel(contenido, f"estimado-obra-{obra.id}-{date.today().isoformat()}.xlsx")
 
 
@@ -495,3 +510,200 @@ def usar_como_contingencia(
     )
     sesion.commit()
     return _estimado_obra(sesion, obra)
+
+
+# --- Bitácora de cambios ---
+
+
+def _cambios(sesion: Session, obra_id: int) -> list[Cambio]:
+    return list(sesion.scalars(select(Cambio).where(Cambio.obra_id == obra_id).order_by(Cambio.numero)))
+
+
+def _bitacora(sesion: Session, obra: Obra) -> BitacoraCambios:
+    cambios = _cambios(sesion, obra.id)
+    versiones = dict(
+        sesion.execute(
+            select(LineaBase.cambio_id, LineaBase.version).where(
+                LineaBase.obra_id == obra.id, LineaBase.cambio_id.is_not(None)
+            )
+        ).all()
+    )
+    aprobados = [c for c in cambios if c.estado == "aprobado"]
+    pendientes = [c for c in cambios if c.estado == "pendiente"]
+    vigente = servicios.linea_base_vigente(sesion, obra.id)
+    return BitacoraCambios(
+        moneda=obra.moneda,
+        cambios=[
+            CambioSalida.model_validate(c).model_copy(
+                update={"codigo": ts.codigo_cambio(c), "linea_base_version": versiones.get(c.id)}
+            )
+            for c in cambios
+        ],
+        pendientes=len(pendientes),
+        aprobados=len(aprobados),
+        costo_aprobado=sum((c.impacto_costo for c in aprobados), Decimal("0")),
+        dias_aprobados=sum(c.impacto_dias for c in aprobados),
+        costo_pendiente=sum((c.impacto_costo for c in pendientes), Decimal("0")),
+        linea_base_version=vigente.version if vigente else None,
+    )
+
+
+def _cambio_propio(sesion: Session, dueno: Usuario, cambio_id: int) -> tuple[Cambio, Obra]:
+    cambio = sesion.get(Cambio, cambio_id)
+    if cambio is None:
+        raise HTTPException(404, "Cambio no encontrado")
+    return cambio, obra_propia(sesion, dueno, cambio.obra_id)
+
+
+def _datos_cambio(datos: CambioEntrada) -> dict:
+    return {k: v.strip() if isinstance(v, str) else v for k, v in datos.model_dump().items()}
+
+
+@rutas.get("/obras/{obra_id}/cambios", response_model=BitacoraCambios)
+def ver_cambios(obra_id: int, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)):
+    return _bitacora(sesion, obra_propia(sesion, dueno, obra_id))
+
+
+@rutas.post("/obras/{obra_id}/cambios", response_model=BitacoraCambios, status_code=status.HTTP_201_CREATED)
+def crear_cambio(
+    obra_id: int, datos: CambioEntrada, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)
+):
+    obra = obra_propia(sesion, dueno, obra_id)
+    numero = (sesion.scalar(select(func.max(Cambio.numero)).where(Cambio.obra_id == obra.id)) or 0) + 1
+    sesion.add(Cambio(obra_id=obra.id, numero=numero, estado="pendiente", **_datos_cambio(datos)))
+    sesion.commit()
+    return _bitacora(sesion, obra)
+
+
+@rutas.put("/cambios/{cambio_id}", response_model=BitacoraCambios)
+def editar_cambio(
+    cambio_id: int,
+    datos: CambioEntrada,
+    dueno: Usuario = Depends(solo_dueno),
+    sesion: Session = Depends(obtener_sesion),
+):
+    cambio, obra = _cambio_propio(sesion, dueno, cambio_id)
+    ts.exigir_pendiente(cambio)
+    for campo, valor in _datos_cambio(datos).items():
+        setattr(cambio, campo, valor)
+    sesion.commit()
+    return _bitacora(sesion, obra)
+
+
+@rutas.delete("/cambios/{cambio_id}", response_model=BitacoraCambios)
+def borrar_cambio(cambio_id: int, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)):
+    """Solo un cambio pendiente (error de carga). Uno aprobado o rechazado queda en la bitácora."""
+    cambio, obra = _cambio_propio(sesion, dueno, cambio_id)
+    ts.exigir_pendiente(cambio)
+    sesion.delete(cambio)
+    sesion.commit()
+    return _bitacora(sesion, obra)
+
+
+@rutas.post("/cambios/{cambio_id}/aprobar", response_model=BitacoraCambios)
+def aprobar_cambio(
+    cambio_id: int,
+    datos: ResolucionCambio,
+    dueno: Usuario = Depends(solo_dueno),
+    sesion: Session = Depends(obtener_sesion),
+):
+    cambio, obra = _cambio_propio(sesion, dueno, cambio_id)
+    ts.aprobar_cambio(sesion, obra, cambio, dueno, datos.aprobador, datos.agregar_partida, datos.comentario)
+    sesion.commit()
+    return _bitacora(sesion, obra)
+
+
+@rutas.post("/cambios/{cambio_id}/rechazar", response_model=BitacoraCambios)
+def rechazar_cambio(
+    cambio_id: int,
+    datos: ResolucionCambio,
+    dueno: Usuario = Depends(solo_dueno),
+    sesion: Session = Depends(obtener_sesion),
+):
+    cambio, obra = _cambio_propio(sesion, dueno, cambio_id)
+    ts.rechazar_cambio(cambio, datos.aprobador, datos.comentario)
+    sesion.commit()
+    return _bitacora(sesion, obra)
+
+
+# --- Riesgos y cambios por Excel ---
+
+
+def _versiones_por_cambio(sesion: Session, obra_id: int) -> dict[int, int]:
+    return dict(
+        sesion.execute(
+            select(LineaBase.cambio_id, LineaBase.version).where(
+                LineaBase.obra_id == obra_id, LineaBase.cambio_id.is_not(None)
+            )
+        ).all()
+    )
+
+
+@rutas.get("/obras/{obra_id}/registros.xlsx")
+def exportar_registros(obra_id: int, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)):
+    obra = obra_propia(sesion, dueno, obra_id)
+    contenido = rx.escribir_registros(
+        _riesgos(sesion, obra.id), _cambios(sesion, obra.id), _versiones_por_cambio(sesion, obra.id)
+    )
+    return _excel(contenido, f"riesgos-y-cambios-obra-{obra.id}.xlsx")
+
+
+async def _leer_registros(request: Request, sesion: Session, obra: Obra) -> rx.LecturaRegistros:
+    contenido = await _leer_cuerpo(request)
+    return await run_in_threadpool(rx.leer_registros, contenido, _riesgos(sesion, obra.id), _cambios(sesion, obra.id))
+
+
+def _conteo(lista, nuevos: bool) -> int:
+    return sum(1 for x in lista if (x.numero is None) == nuevos)
+
+
+@rutas.post("/obras/{obra_id}/registros/previa", response_model=VistaPreviaRegistros)
+async def vista_previa_registros(
+    obra_id: int, request: Request, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)
+):
+    obra = obra_propia(sesion, dueno, obra_id)
+    lec = await _leer_registros(request, sesion, obra)
+    return VistaPreviaRegistros(
+        valida=lec.valida,
+        errores=_problemas(lec.errores),
+        advertencias=_problemas(lec.advertencias),
+        riesgos_nuevos=_conteo(lec.riesgos, True),
+        riesgos_actualizados=_conteo(lec.riesgos, False),
+        cambios_nuevos=_conteo(lec.cambios, True),
+        cambios_actualizados=_conteo(lec.cambios, False),
+    )
+
+
+@rutas.post("/obras/{obra_id}/registros/importar", response_model=RegistrosImportados)
+async def importar_registros(
+    obra_id: int, request: Request, dueno: Usuario = Depends(solo_dueno), sesion: Session = Depends(obtener_sesion)
+):
+    """Vuelve a validar y, si no hay errores, crea o actualiza riesgos y cambios (los cambios nuevos, pendientes)."""
+    obra = obra_propia(sesion, dueno, obra_id)
+    lec = await _leer_registros(request, sesion, obra)
+    if not lec.valida:
+        primero = lec.errores[0]
+        donde = f"{primero.hoja}, fila {primero.fila}" if primero.fila else primero.hoja
+        raise HTTPException(422, f"El archivo tiene {len(lec.errores)} error(es). Primero: {donde}: {primero.mensaje}")
+    riesgos = {r.numero: r for r in _riesgos(sesion, obra.id)}
+    siguiente = max(riesgos, default=0)
+    for r in lec.riesgos:
+        if r.numero is None:
+            siguiente += 1
+            sesion.add(Riesgo(obra_id=obra.id, numero=siguiente, **r.datos))
+        else:
+            for campo, valor in r.datos.items():
+                setattr(riesgos[r.numero], campo, valor)
+    cambios = {c.numero: c for c in _cambios(sesion, obra.id)}
+    siguiente = max(cambios, default=0)
+    for c in lec.cambios:
+        if c.numero is None:
+            siguiente += 1
+            sesion.add(Cambio(obra_id=obra.id, numero=siguiente, estado="pendiente", **c.datos))
+        else:
+            for campo, valor in c.datos.items():
+                setattr(cambios[c.numero], campo, valor)
+    sesion.commit()
+    return RegistrosImportados(
+        riesgos=_registro(sesion, obra), cambios=_bitacora(sesion, obra), advertencias=_problemas(lec.advertencias)
+    )

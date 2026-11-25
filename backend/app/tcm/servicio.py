@@ -16,6 +16,7 @@ from app.calculos import cronograma as cr
 from app.modelos import (
     Actividad,
     BaseEstimado,
+    Cambio,
     ClasificacionEstimado,
     Dependencia,
     Fase,
@@ -23,6 +24,7 @@ from app.modelos import (
     LineaBasePartida,
     Obra,
     ParametrosApu,
+    Partida,
     RecursoActividad,
     Usuario,
 )
@@ -158,8 +160,19 @@ def lineas_base(sesion: Session, obra_id: int) -> list[LineaBase]:
     )
 
 
-def aprobar_linea_base(sesion: Session, obra: Obra, usuario: Usuario, motivo: str) -> LineaBase:
-    """Congela presupuesto y fechas de todas las partidas como una versión nueva; la anterior deja de valer."""
+def aprobar_linea_base(
+    sesion: Session, obra: Obra, usuario: Usuario, motivo: str, cambio: Cambio | None = None
+) -> LineaBase:
+    """Congela presupuesto y fechas de todas las partidas como una versión nueva; la anterior deja de valer.
+
+    La v1 se aprueba directamente. Las siguientes solo nacen de un cambio aprobado de la bitácora (`cambio`).
+    """
+    if cambio is None and servicios.linea_base_vigente(sesion, obra.id) is not None:
+        raise HTTPException(
+            409,
+            "La obra ya tiene una línea base aprobada. Una versión nueva solo sale de un cambio aprobado: "
+            "regístralo en la pestaña Cambios.",
+        )
     servicios.recalcular_cronograma(sesion, obra)
     partidas = servicios.partidas_de_obra(sesion, obra.id)
     bac = sum((p.presupuesto for p in partidas), CERO)
@@ -177,9 +190,11 @@ def aprobar_linea_base(sesion: Session, obra: Obra, usuario: Usuario, motivo: st
         motivo=motivo.strip(),
         bac=bac,
         fecha_inicio=obra.fecha_inicio,
-        fecha_fin=obra.fecha_fin,
+        # Una partida suelta (ej. un cambio) puede terminar después de la última actividad.
+        fecha_fin=max([obra.fecha_fin] + [p.fecha_fin for p in partidas if p.fecha_fin]),
         clase=clasificar(sesion, obra).clase.clase,
         vigente=True,
+        cambio_id=cambio.id if cambio else None,
         partidas=[
             LineaBasePartida(
                 partida_id=p.id,
@@ -291,3 +306,83 @@ def crear_obra_desde_plantilla(sesion: Session, dueno: Usuario, d: ObraLeida) ->
             partida.regla_medicion = reglas[partida.actividad_id]
     sesion.flush()
     return obra
+
+
+# --- Bitácora de cambios ---
+
+FASE_CAMBIOS = "Cambios aprobados"
+
+
+def codigo_cambio(c: Cambio) -> str:
+    return f"C-{c.numero:02d}"
+
+
+def exigir_pendiente(c: Cambio) -> None:
+    if c.estado != "pendiente":
+        raise HTTPException(409, f"El cambio {codigo_cambio(c)} ya fue {c.estado}: no se puede modificar.")
+
+
+def aprobar_cambio(
+    sesion: Session,
+    obra: Obra,
+    cambio: Cambio,
+    usuario: Usuario,
+    aprobador: str,
+    agregar_partida: bool,
+    comentario: str = "",
+) -> LineaBase:
+    """Aprueba el cambio y crea la versión siguiente de la línea base, que guarda qué cambio la generó.
+
+    `agregar_partida`: crea una partida "C-xx" con el impacto en costo (alcance adicional). Si no, la versión nueva
+    congela el plan como el dueño lo ajustó en el cronograma (y el plan tiene que reflejar el cambio).
+    """
+    exigir_pendiente(cambio)
+    vigente = servicios.linea_base_vigente(sesion, obra.id)
+    if vigente is None:
+        raise HTTPException(422, "Primero aprueba la línea base inicial de la obra (pestaña Línea base).")
+    if agregar_partida:
+        if cambio.impacto_costo <= 0:
+            raise HTTPException(
+                422,
+                "Solo un cambio con costo adicional se agrega como partida. Si quita alcance, ajusta el cronograma.",
+            )
+        inicio = max(servicios.hoy(), obra.fecha_inicio)
+        dias = cambio.impacto_dias if cambio.impacto_dias > 0 else 7
+        orden = (sesion.scalar(select(func.max(Partida.orden)).where(Partida.obra_id == obra.id)) or 0) + 1
+        partida = Partida(
+            obra_id=obra.id,
+            codigo=codigo_cambio(cambio),
+            nombre=f"Cambio {codigo_cambio(cambio)}: {cambio.descripcion}"[:160],
+            fase=FASE_CAMBIOS,
+            fecha_inicio=inicio,
+            fecha_fin=cr.fin_de(inicio, dias),
+            presupuesto=cambio.impacto_costo,
+            orden=orden,
+        )
+        sesion.add(partida)
+        sesion.flush()
+        cambio.partida_id = partida.id
+    else:
+        servicios.recalcular_cronograma(sesion, obra)
+        bac_plan = sum((p.presupuesto for p in servicios.partidas_de_obra(sesion, obra.id)), CERO)
+        if cambio.impacto_costo != 0 and bac_plan == vigente.bac:
+            raise HTTPException(
+                422,
+                f"El plan todavía cuesta lo mismo que la línea base v{vigente.version}: ajusta el cronograma con el "
+                "cambio o apruébalo agregándolo como partida.",
+            )
+    cambio.estado = "aprobado"
+    cambio.aprobador = aprobador.strip()
+    cambio.fecha_resolucion = servicios.hoy()
+    cambio.comentario_resolucion = comentario.strip()
+    sesion.flush()
+    motivo = f"Cambio {codigo_cambio(cambio)} aprobado: {cambio.descripcion}"
+    return aprobar_linea_base(sesion, obra, usuario, motivo[:2000], cambio=cambio)
+
+
+def rechazar_cambio(cambio: Cambio, aprobador: str, comentario: str = "") -> None:
+    exigir_pendiente(cambio)
+    cambio.estado = "rechazado"
+    cambio.aprobador = aprobador.strip()
+    cambio.fecha_resolucion = servicios.hoy()
+    cambio.comentario_resolucion = comentario.strip()

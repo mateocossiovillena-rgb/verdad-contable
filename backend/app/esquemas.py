@@ -792,6 +792,8 @@ class LineaBaseResumen(Modelo):
     fecha_fin: date
     clase: int | None
     vigente: bool
+    cambio_id: int | None = None
+    cambio_codigo: str | None = None
 
 
 class LineaBaseDetalle(LineaBaseResumen):
@@ -892,3 +894,65 @@ class RegistroRiesgos(BaseModel):
     dias_esperados: float
     porcentaje_del_estimado: float | None
     contingencia_actual_porcentaje: float
+
+
+# --- Kit TCM: bitácora de cambios ---
+
+
+class CambioEntrada(BaseModel):
+    fecha: date
+    solicitante: str = Field(min_length=2, max_length=120)
+    descripcion: str = Field(min_length=3, max_length=2000)
+    impacto_costo: Decimal = Field(default=Decimal("0"), max_digits=14, decimal_places=2)
+    impacto_dias: int = Field(default=0, ge=-3650, le=3650)
+
+
+class ResolucionCambio(BaseModel):
+    aprobador: str = Field(min_length=2, max_length=120)
+    comentario: str = Field(default="", max_length=2000)
+    # Solo al aprobar: agregar el cambio como partida nueva (alcance adicional).
+    agregar_partida: bool = True
+
+
+class CambioSalida(Modelo):
+    id: int
+    numero: int
+    codigo: str = ""
+    fecha: date
+    solicitante: str
+    descripcion: str
+    impacto_costo: Dinero
+    impacto_dias: int
+    estado: str
+    aprobador: str
+    fecha_resolucion: date | None
+    comentario_resolucion: str
+    partida_id: int | None
+    linea_base_version: int | None = None
+
+
+class BitacoraCambios(BaseModel):
+    moneda: str
+    cambios: list[CambioSalida]
+    pendientes: int
+    aprobados: int
+    costo_aprobado: Dinero
+    dias_aprobados: int
+    costo_pendiente: Dinero
+    linea_base_version: int | None
+
+
+class VistaPreviaRegistros(BaseModel):
+    valida: bool
+    errores: list[ProblemaSalida]
+    advertencias: list[ProblemaSalida]
+    riesgos_nuevos: int
+    riesgos_actualizados: int
+    cambios_nuevos: int
+    cambios_actualizados: int
+
+
+class RegistrosImportados(BaseModel):
+    riesgos: RegistroRiesgos
+    cambios: BitacoraCambios
+    advertencias: list[ProblemaSalida]

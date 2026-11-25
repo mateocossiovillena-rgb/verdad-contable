@@ -119,7 +119,7 @@ export function ImportarObra() {
   );
 }
 
-function TablaProblemas({
+export function TablaProblemas({
   titulo,
   lista,
   tono,

@@ -47,9 +47,10 @@ máximo** (el doble de la meta) se detiene, se anota "no completó" y se pasa a 
 | 4 | "Registra que la excavación de cimientos está al 100 % y que se gastaron Bs 2.000 en ella. Luego dime si la obra va bien de costo y cuánto costará al final." | Lee CPI, SPI y EAC y los interpreta | 5 min | 10 min |
 | 5 | "Registra el riesgo 'suba del precio del fierro' y un cambio pedido por el cliente: 'agregar un baño de visitas'." | Ambos quedan guardados | 5 min | 10 min |
 
-> Tareas 4 y 5: el EVM con pronósticos (Fase 2) y los registros de riesgos y cambios (Fases 3 y 4) se terminan
-> después de la entrega del 25/11. La prueba se hace cuando estén listas; si se adelanta, se aplican solo las
-> tareas 1 a 3.
+> Dónde se hace cada tarea en la app: 1 → Obras → Importar desde Excel; 2 → pestaña Estimado; 3 → pestaña
+> Línea base (tabla PV semanal y curva S); 4 → Registro de hoy (avance y gasto) y luego pestaña Resumen
+> (CPI, SPI y los tres EAC); 5 → pestañas Riesgos y Cambios. El moderador no lo dice: sirve para la hoja de
+> registro (anotar si el participante encontró la pestaña solo).
 
 Variante con plantilla vacía (si hay tiempo, al final): "Descarga la plantilla vacía y carga una actividad
 de tu última obra con 3 insumos". Sirve para ver si la plantilla se entiende sin el ejemplo.

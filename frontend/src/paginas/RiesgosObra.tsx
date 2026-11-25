@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { dinero, leerMonto } from "../formato";
 import type { EstadoRiesgo, EstimadoObra, EstrategiaRiesgo, RegistroRiesgos, Riesgo } from "../tipos";
+import { ExcelRegistros } from "./CambiosObra";
 import {
   AreaTexto,
   Boton,
@@ -159,6 +160,8 @@ export function VistaRiesgos({ obraId }: { obraId: string }) {
           </ul>
         </Tarjeta>
       )}
+
+      <ExcelRegistros obraId={obraId} />
     </>
   );
 }

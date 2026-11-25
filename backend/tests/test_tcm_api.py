@@ -96,9 +96,20 @@ def test_linea_base_aprobada_es_la_que_mide_el_valor_ganado(cliente, dueno, exce
     ind = cliente.get(f"/api/obras/{obra_id}/indicadores?corte={corte}", headers=dueno).json()
     assert ind["indicadores"]["bac"] == v1["bac"]
 
-    # Una versión nueva toma el plan actual; la v1 queda tal cual y deja de valer.
-    est = cliente.post(f"/api/obras/{obra_id}/lineas-base", json={"motivo": "Cambio de utilidad"}, headers=dueno).json()
+    # Aprobar otra versión a mano ya no se puede: solo por un cambio aprobado.
+    r = cliente.post(f"/api/obras/{obra_id}/lineas-base", json={"motivo": "Otra"}, headers=dueno)
+    assert r.status_code == 409
+    diferencia = round(est["totales"]["total"] - v1["bac"], 2)
+    cambio = {"fecha": "2026-12-10", "solicitante": "Gerencia", "descripcion": "Subir la utilidad al 15 %"}
+    bit = cliente.post(f"/api/obras/{obra_id}/cambios", json={**cambio, "impacto_costo": diferencia}, headers=dueno)
+    cambio_id = bit.json()["cambios"][0]["id"]
+    r = cliente.post(
+        f"/api/cambios/{cambio_id}/aprobar", json={"aprobador": "Ing. Rojas", "agregar_partida": False}, headers=dueno
+    )
+    assert r.status_code == 200, r.text
+    est = cliente.get(f"/api/obras/{obra_id}/estimado", headers=dueno).json()
     assert est["vigente"]["version"] == 2
+    assert est["vigente"]["cambio_codigo"] == "C-01"
     assert est["vigente"]["bac"] == est["totales"]["total"]
     assert [(b["version"], b["vigente"]) for b in est["lineas_base"]] == [(2, True), (1, False)]
     vieja = cliente.get(f"/api/lineas-base/{v1['id']}", headers=dueno).json()

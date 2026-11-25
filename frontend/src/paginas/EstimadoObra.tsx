@@ -7,6 +7,7 @@ import { BotonContingencia } from "./RiesgosObra";
 import {
   AreaTexto,
   Boton,
+  BotonEnlace,
   Campo,
   Cargando,
   Entrada,
@@ -521,20 +522,32 @@ function LineaBase({ obraId, e }: { obraId: string; e: EstimadoObra }) {
 
   return (
     <>
-      {(!v || e.plan_distinto_de_base) && (
+      {v && e.plan_distinto_de_base && (
+        <Tarjeta className="space-y-2 border-l-4 border-l-amber-500">
+          <h2 className="font-semibold text-stone-900">El plan cambió desde la línea base v{v.version}</h2>
+          <p className="text-sm text-stone-600">
+            El presupuesto o las fechas ya no coinciden con la v{v.version}, y el valor ganado sigue midiendo contra ella. Una
+            versión nueva solo se crea al aprobar un cambio: regístralo en la pestaña Cambios.
+          </p>
+          <BotonEnlace a={`/obras/${obraId}?vista=cambios`} variante="secundario">
+            Ir a Cambios
+          </BotonEnlace>
+        </Tarjeta>
+      )}
+
+      {!v && (
         <Tarjeta>
           <form onSubmit={aprobar} className="space-y-3">
-            <h2 className="font-semibold text-stone-900">{v ? "El plan cambió desde la línea base" : "Aprobar línea base"}</h2>
+            <h2 className="font-semibold text-stone-900">Aprobar línea base</h2>
             <p className="text-sm text-stone-600">
-              {v
-                ? `El presupuesto o las fechas ya no coinciden con la v${v.version}. El valor ganado sigue midiendo contra la v${v.version} hasta que apruebes una nueva versión.`
-                : "Congela el presupuesto y las fechas actuales. Desde ese momento el valor ganado mide contra esta foto, aunque después edites el plan. No se puede modificar: cada cambio crea otra versión."}
+              Congela el presupuesto y las fechas actuales. Desde ese momento el valor ganado mide contra esta foto, aunque
+              después edites el plan. No se puede modificar: las versiones siguientes solo salen de cambios aprobados.
             </p>
             <Campo etiqueta="Motivo">
-              <Entrada value={motivo} onChange={(ev) => setMotivo(ev.target.value)} placeholder={v ? "Cambio aprobado por el cliente" : "Contrato firmado"} />
+              <Entrada value={motivo} onChange={(ev) => setMotivo(ev.target.value)} placeholder="Contrato firmado" />
             </Campo>
             <Boton type="submit" disabled={guardar.isPending || !puedeAprobar}>
-              {guardar.isPending ? "Aprobando…" : v ? `Aprobar versión ${v.version + 1}` : "Aprobar línea base"}
+              {guardar.isPending ? "Aprobando…" : "Aprobar línea base"}
             </Boton>
             {!puedeAprobar && <p className="text-sm text-amber-800">Primero carga el estimado: la obra no tiene presupuesto.</p>}
             <MensajeError error={guardar.error} />
@@ -611,6 +624,7 @@ function LineaBase({ obraId, e }: { obraId: string; e: EstimadoObra }) {
                 <span className="min-w-0 flex-1">
                   <span className="font-medium text-stone-900">v{lb.version}</span>
                   <span className="tabular-nums text-stone-600"> · {fecha(lb.aprobada_en)}</span>
+                  {lb.cambio_codigo && <span className="font-medium text-stone-700"> · por {lb.cambio_codigo}</span>}
                   {lb.motivo && <span className="text-stone-600"> · {lb.motivo}</span>}
                 </span>
                 <span className="tabular-nums text-stone-900">{dinero(lb.bac, m)}</span>

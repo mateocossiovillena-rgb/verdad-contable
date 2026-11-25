@@ -375,6 +375,8 @@ class LineaBase(Base):
     fecha_fin: Mapped[date] = mapped_column(Date)
     clase: Mapped[int | None] = mapped_column(Integer)
     vigente: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Cambio aprobado que generó esta versión (None en la v1): trazabilidad del control de cambios.
+    cambio_id: Mapped[int | None] = mapped_column(ForeignKey("cambio.id", ondelete="SET NULL"))
 
     partidas: Mapped[list[LineaBasePartida]] = relationship(
         order_by="LineaBasePartida.orden", cascade="all, delete-orphan", passive_deletes=True
@@ -434,3 +436,33 @@ class Riesgo(Base):
     estado: Mapped[str] = mapped_column(String(10), default="abierto")
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora, onupdate=ahora)
+
+
+ESTADOS_CAMBIO = {"pendiente": "Pendiente", "aprobado": "Aprobado", "rechazado": "Rechazado"}
+
+
+class Cambio(Base):
+    """Bitácora de cambios de la obra. Solo un cambio aprobado genera una nueva versión de la línea base.
+
+    Aprobado o rechazado ya no se edita ni se borra.
+    """
+
+    __tablename__ = "cambio"
+    __table_args__ = (UniqueConstraint("obra_id", "numero"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    obra_id: Mapped[int] = mapped_column(ForeignKey("obra.id", ondelete="CASCADE"), index=True)
+    numero: Mapped[int] = mapped_column(Integer)  # se muestra como C-01, C-02…
+    fecha: Mapped[date] = mapped_column(Date)
+    solicitante: Mapped[str] = mapped_column(String(120))
+    descripcion: Mapped[str] = mapped_column(Text)
+    # Puede ser negativo (se quita alcance) o cero.
+    impacto_costo: Mapped[Decimal] = mapped_column(DINERO, default=Decimal("0"))
+    impacto_dias: Mapped[int] = mapped_column(Integer, default=0)
+    estado: Mapped[str] = mapped_column(String(10), default="pendiente")
+    aprobador: Mapped[str] = mapped_column(String(120), default="")
+    fecha_resolucion: Mapped[date | None] = mapped_column(Date)
+    comentario_resolucion: Mapped[str] = mapped_column(Text, default="")
+    # Partida creada al aprobar (si se eligió agregar el cambio como partida).
+    partida_id: Mapped[int | None] = mapped_column(ForeignKey("partida.id", ondelete="SET NULL"))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)

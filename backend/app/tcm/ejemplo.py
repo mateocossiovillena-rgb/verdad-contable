@@ -393,7 +393,47 @@ def cargar_en_ejecucion(sesion: Session, dueno: Usuario, contenido: bytes, hoy: 
                 )
             )
     sesion.flush()
+    cargar_cambios(sesion, obra, dueno, hoy)
     return obra
+
+
+def cargar_cambios(sesion: Session, obra: Obra, dueno: Usuario, hoy: date) -> None:
+    """Bitácora de ejemplo: un cambio aprobado (genera la línea base v2), uno pendiente y uno rechazado."""
+    from datetime import timedelta
+
+    from app.modelos import Cambio
+
+    cambios = [
+        (hoy - timedelta(days=20), "Cliente", "Agregar baño de visitas (2,5 m²) junto a la sala", Decimal("14500"), 10),
+        (hoy - timedelta(days=12), "Cliente", "Cambiar la cubierta de calamina por teja colonial", Decimal("18000"), 7),
+        (
+            hoy - timedelta(days=3),
+            "Cliente",
+            "Piso de porcelanato en sala y comedor en vez de cerámica",
+            Decimal("9800"),
+            0,
+        ),
+    ]
+    filas = []
+    for numero, (fecha, solicitante, descripcion, costo, dias) in enumerate(cambios, 1):
+        c = Cambio(
+            obra_id=obra.id,
+            numero=numero,
+            fecha=fecha,
+            solicitante=solicitante,
+            descripcion=descripcion,
+            impacto_costo=costo,
+            impacto_dias=dias,
+            estado="pendiente",
+        )
+        sesion.add(c)
+        filas.append(c)
+    sesion.flush()
+    ts.aprobar_cambio(
+        sesion, obra, filas[0], dueno, "Ing. Residente", agregar_partida=True, comentario="Firmado por el cliente"
+    )
+    ts.rechazar_cambio(filas[1], "Ing. Residente", "La estructura de madera no soporta el peso de la teja.")
+    sesion.flush()
 
 
 def main() -> None:

@@ -116,7 +116,15 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
   - [x] Fase 3: registro de riesgos 44R-08 (`Riesgo`, `tcm/riesgos.py`: valor esperado P × I, días esperados, nivel
         por matriz 3×3, resumen de abiertos); API `/obras/{id}/riesgos`, `/riesgos/{id}`, POST
         `/obras/{id}/riesgos/contingencia` (copia Σ P × I a la Base del estimado); pestaña Riesgos; 6 riesgos de
-        ejemplo; 192 tests. Importar/exportar riesgos por Excel queda para la fase 4.
+        ejemplo; 192 tests.
+  - [x] Fase 4: bitácora de cambios (`Cambio`: pendiente/aprobado/rechazado, resuelto = inmutable). Después de la v1,
+        la línea base SOLO se versiona aprobando un cambio (`ts.aprobar_cambio`; POST `/lineas-base` da 409 si ya hay
+        vigente); `LineaBase.cambio_id` = trazabilidad. Aprobar puede crear la partida "C-xx" (fase "Cambios
+        aprobados") o congelar el plan ajustado a mano (exige que el BAC del plan haya cambiado). Riesgos y cambios
+        en Excel (`tcm/registros_excel.py`: `/obras/{id}/registros.xlsx`, `/registros/previa`, `/registros/importar`;
+        filas sin código = nuevas, cambios nuevos entran pendientes) y como hojas del estimado exportado; pestaña
+        Cambios; bitácora de ejemplo en la obra en ejecución (C-01 aprobado → v2, C-02 rechazado, C-03 pendiente);
+        204 tests.
 
 ## Publicación (Render)
 - Blueprint `render.yaml`: servicio web `verdad-contable` (Docker, Starter, Virginia) + Postgres

@@ -39,7 +39,8 @@ def _formato(hoja: Worksheet, columnas: str, formato: str, desde: int = 2) -> No
             celda.number_format = formato
 
 
-def exportar_estimado(sesion: Session, obra: Obra, base: LineaBase | None) -> bytes:
+def exportar_estimado(sesion: Session, obra: Obra, base: LineaBase | None, registros: tuple | None = None) -> bytes:
+    """`registros` = (riesgos, cambios, versión de línea base por cambio) para agregar sus hojas."""
     est = ts.estimado(sesion, obra)
     resultado = ts.clasificar(sesion, obra, est.total)
     tabla = cl.tabla()
@@ -235,6 +236,10 @@ def exportar_estimado(sesion: Session, obra: Obra, base: LineaBase | None) -> by
             hoja.add_chart(grafico, "H2")
 
     _hoja_valor_ganado(libro, sesion, obra, base)
+    if registros is not None:
+        from app.tcm import registros_excel
+
+        registros_excel.agregar_hojas(libro, *registros)
 
     salida = BytesIO()
     libro.save(salida)

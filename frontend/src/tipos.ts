@@ -514,6 +514,8 @@ export interface LineaBaseResumen {
   fecha_fin: string;
   clase: number | null;
   vigente: boolean;
+  cambio_id: number | null;
+  cambio_codigo: string | null;
 }
 
 export interface SemanaPv {
@@ -614,4 +616,52 @@ export interface RegistroRiesgos {
   dias_esperados: number;
   porcentaje_del_estimado: number | null;
   contingencia_actual_porcentaje: number;
+}
+
+// --- Kit TCM: bitácora de cambios ---
+
+export type EstadoCambio = "pendiente" | "aprobado" | "rechazado";
+
+export interface Cambio {
+  id: number;
+  numero: number;
+  codigo: string;
+  fecha: string;
+  solicitante: string;
+  descripcion: string;
+  impacto_costo: number;
+  impacto_dias: number;
+  estado: EstadoCambio;
+  aprobador: string;
+  fecha_resolucion: string | null;
+  comentario_resolucion: string;
+  partida_id: number | null;
+  linea_base_version: number | null;
+}
+
+export interface BitacoraCambios {
+  moneda: string;
+  cambios: Cambio[];
+  pendientes: number;
+  aprobados: number;
+  costo_aprobado: number;
+  dias_aprobados: number;
+  costo_pendiente: number;
+  linea_base_version: number | null;
+}
+
+export interface VistaPreviaRegistros {
+  valida: boolean;
+  errores: ProblemaImportacion[];
+  advertencias: ProblemaImportacion[];
+  riesgos_nuevos: number;
+  riesgos_actualizados: number;
+  cambios_nuevos: number;
+  cambios_actualizados: number;
+}
+
+export interface RegistrosImportados {
+  riesgos: RegistroRiesgos;
+  cambios: BitacoraCambios;
+  advertencias: ProblemaImportacion[];
 }
