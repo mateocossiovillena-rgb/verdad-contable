@@ -29,8 +29,11 @@
 
 1. Cuenta del participante creada y vacía (o la cuenta demo sin la obra de ejemplo).
 2. Archivo `kit/ejemplo/vivienda-120m2.xlsx` copiado en el escritorio con el nombre `obra-pyme.xlsx`
-   (es la obra que el participante va a "cargar"; así todos parten de los mismos datos).
-3. Hoja de registro impresa (sección 6) y cronómetro en cero.
+   (es la obra que el participante va a "cargar"; así todos parten de los mismos datos). En la hoja
+   *Datos de obra* cambiar la **fecha de inicio a 3 semanas antes del día de la prueba**: así, en la tarea 4,
+   la obra ya está en marcha y el SPI tiene dato.
+3. `kit/prueba/hoja-de-registro.xlsx` abierta en la laptop del observador (o impresa, sección 6) y
+   cronómetro en cero.
 4. Leer el guion de bienvenida: _"Vamos a probar el sistema, no a ti. Si algo no se entiende, es culpa
    del sistema. Piensa en voz alta. Solo te ayudaré si me lo pides o si te quedas trabado más de 2 minutos."_
 
@@ -68,6 +71,10 @@ Un mismo momento puede tener más de un código (ej. un error del sistema que lo
 
 ## 6. Hoja de registro (una por participante)
 
+La versión para llenar en la computadora es `kit/prueba/hoja-de-registro.xlsx`: una hoja por participante
+(P1–P3) donde el tiempo, el "dentro de la meta" y el puntaje SUS se calculan solos, y una hoja *Resumen* con
+el tiempo medio frente a la meta, la tasa de éxito, los errores por tipo y el SUS promedio. Versión en papel:
+
 Participante: ________ Cargo: ________ Experiencia (años): ____ Presupuesta con: ________ Conoce EVM: sí / de oído / no
 
 | # | Inicio | Fin | Tiempo (min) | ¿Completó? (sí / con ayuda / no) | D | P | A | S | Observaciones (qué hizo, dónde dudó, qué dijo) |
@@ -80,6 +87,18 @@ Participante: ________ Cargo: ________ Experiencia (años): ____ Presupuesta con
 
 **Indicadores que se reportan** (por tarea y en total): tiempo medio frente a la meta; tasa de éxito
 (sí / con ayuda / no); número de errores por tipo; puntaje SUS; temas repetidos en los comentarios.
+
+### Clave de respuestas (solo para el moderador)
+
+Con `obra-pyme.xlsx` (la vivienda de ejemplo, total del estimado Bs 406.161,07):
+
+| # | Respuesta esperada |
+|---|---|
+| 1 | La obra aparece en Mis obras con 7 fases y 34 actividades; la vista previa no mostró errores |
+| 2 | Pasa de 55 % a **65 % de definición: clase 2** (no cambia de clase). Rango probable: **Bs 377.729,80 a Bs 446.777,18** (−7 % / +10 %) |
+| 3 | Línea base v1 aprobada. PV acumulado al final de la **semana 8: Bs 118.141,52 (29,1 %)** (no depende de la fecha de inicio) |
+| 4 | La excavación (2.1) vale Bs 2.565,92: con 100 % de avance y Bs 2.000 de gasto, el **CPI es mayor que 1** (gasta menos de lo que gana), el **SPI es menor que 1** (las demás actividades planificadas no tienen avance cargado) y el EAC = BAC / CPI queda **por debajo del BAC**. Se acepta cualquier lectura que interprete bien los tres datos |
+| 5 | Aparece R-01 en Riesgos (con su P × I) y C-01 *pendiente* en Cambios (no hace falta aprobarlo) |
 
 ## 7. Cuestionario SUS (System Usability Scale)
 

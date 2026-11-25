@@ -125,6 +125,10 @@ Ver docs/plan-mvp.md. Python 3.12 en local y en producción.
         filas sin código = nuevas, cambios nuevos entran pendientes) y como hojas del estimado exportado; pestaña
         Cambios; bitácora de ejemplo en la obra en ejecución (C-01 aprobado → v2, C-02 rechazado, C-03 pendiente);
         204 tests.
+  - [x] Fase 5: carpeta `/kit` (README, `guia-implementacion.md`, plantillas, ejemplos, `prueba-de-uso.md` con clave
+        de respuestas, `prueba/hoja-de-registro.xlsx` con tiempos, errores D/P/A/S y SUS calculados y hoja Resumen).
+        Los .xlsx se regeneran con `python -m app.tcm.kit` (`tcm/kit.py`, `tcm/hoja_prueba.py`); 206 tests.
+        Pendiente: la clave de la tarea 4 (CPI > 1, SPI < 1, EAC < BAC) no se comprobó en la app.
 
 ## Publicación (Render)
 - Blueprint `render.yaml`: servicio web `verdad-contable` (Docker, Starter, Virginia) + Postgres
